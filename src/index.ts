@@ -111,6 +111,19 @@ class FileUtils {
     }
 }
 
+function getGoogleAuthOptions(): { keyFilename?: string; credentials?: object } {
+    const jsonKey = process.env.GOOGLE_SERVICE_ACCOUNT_JSON;
+    if (jsonKey && jsonKey.trim()) {
+        try {
+            const credentials = JSON.parse(jsonKey) as object;
+            return { credentials };
+        } catch {
+            throw new Error('GOOGLE_SERVICE_ACCOUNT_JSON is set but is not valid JSON.');
+        }
+    }
+    return { keyFilename: PATHS.SERVICE_ACCOUNT_KEY };
+}
+
 class VirtualTryOnService {
     private static getApiEndpoint(): string {
         if (!CONFIG.PROJECT_ID || !CONFIG.LOCATION) {
@@ -121,7 +134,7 @@ class VirtualTryOnService {
 
     private static async getAccessToken(): Promise<string> {
         const auth = new GoogleAuth({
-            keyFilename: PATHS.SERVICE_ACCOUNT_KEY,
+            ...getGoogleAuthOptions(),
             scopes: ['https://www.googleapis.com/auth/cloud-platform'],
         });
         const client = await auth.getClient();
@@ -264,16 +277,25 @@ function initializeApp(): void {
     FileUtils.ensureDirectoryExists(PATHS.UPLOADS);
     FileUtils.ensureDirectoryExists(PATHS.OUTPUTS);
 
-    // Setup authentication
+    // Setup authentication: use env JSON (e.g. Render) or key file (local)
+    const jsonKey = process.env.GOOGLE_SERVICE_ACCOUNT_JSON;
+    if (jsonKey && jsonKey.trim()) {
+        try {
+            JSON.parse(jsonKey);
+        } catch {
+            throw new Error('GOOGLE_SERVICE_ACCOUNT_JSON is set but is not valid JSON.');
+        }
+        return;
+    }
     const keyPath = PATHS.SERVICE_ACCOUNT_KEY;
     if (!keyPath || !fs.existsSync(keyPath)) {
         const msg = [
             'Service account key file not found. Vertex AI requires a Google Cloud service account key.',
             '',
             'Fix by doing ONE of the following:',
-            '  1. Place your key file at: ' + path.resolve(process.cwd(), 'service-account-key.json'),
-            '  2. Set SERVICE_ACCOUNT_KEY_PATH in .env to your key file path (relative to project root), or',
-            '  3. Set GOOGLE_APPLICATION_CREDENTIALS to the absolute path of your key file.',
+            '  1. (Production e.g. Render) Set env var GOOGLE_SERVICE_ACCOUNT_JSON to the full JSON key content.',
+            '  2. (Local) Place your key file at: ' + path.resolve(process.cwd(), 'service-account-key.json'),
+            '  3. Set SERVICE_ACCOUNT_KEY_PATH in .env, or GOOGLE_APPLICATION_CREDENTIALS to the key file path.',
             '',
             'To create a key: Google Cloud Console → IAM & Admin → Service Accounts → create/select → Keys → Add key → JSON.',
         ].join('\n');
