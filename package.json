@@ -4,7 +4,9 @@
   "description": "ZAHA AI - Virtual Try-On using Google Vertex AI",
   "main": "dist/index.js",
   "scripts": {
-    "start": "ts-node src/index.ts",
+    "build": "tsc",
+    "start": "node dist/index.js",
+    "dev": "ts-node src/index.ts",
     "format": "prettier --write \"src/**/*.{ts,js}\" \"public/**/*.{html,css,js}\""
   },
   "keywords": [],
