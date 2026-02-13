@@ -41,7 +41,7 @@ const CONFIG = {
     LOCATION: process.env.LOCATION,
     PORT: Number(process.env.PORT) || 3000,
     MAX_FILE_SIZE: 10 * 1024 * 1024, // 10MB
-    VIRTUAL_TRY_ON_MODEL: 'virtual-try-on-preview-08-04',
+    VIRTUAL_TRY_ON_MODEL: 'virtual-try-on-001',
 } as const;
 
 const PATHS = {
