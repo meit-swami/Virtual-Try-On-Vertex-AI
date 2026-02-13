@@ -1,0 +1,8 @@
+# Render Blueprint – ensures build runs before start
+# https://docs.render.com/blueprint-spec
+services:
+  - type: web
+    name: zaha-ai
+    env: node
+    buildCommand: npm install && npm run build
+    startCommand: npm start
