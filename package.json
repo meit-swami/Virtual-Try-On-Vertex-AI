@@ -1,7 +1,7 @@
 {
-  "name": "virtual-try-on-app",
+  "name": "zaha-ai",
   "version": "1.0.0",
-  "description": "Virtual Try-On using Google Vertex AI",
+  "description": "ZAHA AI - Virtual Try-On using Google Vertex AI",
   "main": "dist/index.js",
   "scripts": {
     "start": "ts-node src/index.ts",
