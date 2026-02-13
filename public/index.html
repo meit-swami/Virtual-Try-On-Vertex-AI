@@ -1,0 +1,881 @@
+<!doctype html>
+<html lang="en">
+    <head>
+        <meta charset="UTF-8" />
+        <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+        <title>Virtual Try-On</title>
+        <style>
+            * {
+                margin: 0;
+                padding: 0;
+                box-sizing: border-box;
+            }
+
+            body {
+                font-family:
+                    -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, Oxygen, Ubuntu,
+                    Cantarell, sans-serif;
+                background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+                min-height: 100vh;
+                padding: 20px;
+            }
+
+            .container {
+                max-width: 1200px;
+                margin: 0 auto;
+                background: white;
+                border-radius: 20px;
+                box-shadow: 0 20px 60px rgba(0, 0, 0, 0.3);
+                overflow: hidden;
+            }
+
+            .header {
+                background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+                color: white;
+                padding: 30px;
+                text-align: center;
+            }
+
+            .header h1 {
+                font-size: 2.5em;
+                margin-bottom: 10px;
+            }
+
+            .header p {
+                opacity: 0.9;
+                font-size: 1.1em;
+            }
+
+            .content {
+                padding: 40px;
+            }
+
+            .upload-section {
+                margin-bottom: 30px;
+            }
+
+            .upload-section h2 {
+                color: #667eea;
+                margin-bottom: 15px;
+                font-size: 1.5em;
+            }
+
+            .upload-area {
+                border: 3px dashed #667eea;
+                border-radius: 15px;
+                padding: 40px;
+                text-align: center;
+                background: #f8f9fa;
+                transition: all 0.3s ease;
+                cursor: pointer;
+                position: relative;
+            }
+
+            .upload-area:hover {
+                border-color: #764ba2;
+                background: #f0f0f0;
+            }
+
+            .upload-area.dragover {
+                border-color: #764ba2;
+                background: #e8e8e8;
+            }
+
+            .upload-area.has-image {
+                border-color: #28a745;
+                background: #f0fff4;
+            }
+
+            .upload-area input[type='file'] {
+                display: none;
+            }
+
+            .upload-icon {
+                font-size: 4em;
+                margin-bottom: 20px;
+            }
+
+            .upload-text {
+                font-size: 1.2em;
+                color: #666;
+                margin-bottom: 10px;
+            }
+
+            .upload-hint {
+                font-size: 0.9em;
+                color: #999;
+            }
+
+            .image-preview-container {
+                margin-top: 20px;
+                position: relative;
+            }
+
+            .image-preview {
+                max-width: 100%;
+                max-height: 300px;
+                border-radius: 10px;
+                box-shadow: 0 5px 15px rgba(0, 0, 0, 0.2);
+            }
+
+            .remove-image {
+                position: absolute;
+                top: 10px;
+                right: 10px;
+                background: #dc3545;
+                color: white;
+                border: none;
+                border-radius: 50%;
+                width: 30px;
+                height: 30px;
+                cursor: pointer;
+                font-size: 18px;
+                display: flex;
+                align-items: center;
+                justify-content: center;
+                transition: background 0.2s;
+            }
+
+            .remove-image:hover {
+                background: #c82333;
+            }
+
+            .btn {
+                background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+                color: white;
+                border: none;
+                padding: 15px 40px;
+                font-size: 1.1em;
+                border-radius: 10px;
+                cursor: pointer;
+                transition:
+                    transform 0.2s,
+                    box-shadow 0.2s;
+                margin-top: 20px;
+                width: 100%;
+            }
+
+            .btn:hover {
+                transform: translateY(-2px);
+                box-shadow: 0 10px 20px rgba(102, 126, 234, 0.4);
+            }
+
+            .btn:disabled {
+                opacity: 0.6;
+                cursor: not-allowed;
+                transform: none;
+            }
+
+            .results {
+                margin-top: 40px;
+            }
+
+            .result-section {
+                margin-bottom: 30px;
+            }
+
+            .result-section h3 {
+                color: #667eea;
+                margin-bottom: 15px;
+                font-size: 1.3em;
+            }
+
+            .result-images {
+                display: grid;
+                grid-template-columns: 1fr;
+                gap: 30px;
+            }
+
+            .result-card {
+                background: #f8f9fa;
+                border-radius: 15px;
+                padding: 20px;
+                box-shadow: 0 5px 15px rgba(0, 0, 0, 0.1);
+            }
+
+            .result-card img {
+                width: 100%;
+                border-radius: 10px;
+                box-shadow: 0 5px 15px rgba(0, 0, 0, 0.2);
+            }
+
+            .result-grid {
+                display: grid;
+                grid-template-columns: 1fr 1fr 0.7fr;
+                gap: 15px;
+                padding: 20px;
+                align-items: start;
+            }
+
+            .result-grid-item {
+                display: flex;
+                flex-direction: column;
+            }
+
+            .result-grid-item h4 {
+                margin-bottom: 10px;
+                color: #667eea;
+                font-size: 1em;
+                text-align: center;
+            }
+
+            .result-grid-item img {
+                width: 100%;
+                border-radius: 10px;
+                box-shadow: 0 5px 15px rgba(0, 0, 0, 0.2);
+                object-fit: contain;
+                height: auto;
+                cursor: pointer;
+                transition: transform 0.2s;
+            }
+
+            .result-grid-item img:hover {
+                transform: scale(1.05);
+            }
+
+            .result-grid-item:last-child img {
+                width: auto;
+                margin: 0 auto;
+                object-fit: contain;
+                height: auto;
+            }
+
+            /* Modal Styles */
+            .modal {
+                display: none;
+                position: fixed;
+                z-index: 1000;
+                left: 0;
+                top: 0;
+                width: 100%;
+                height: 100%;
+                background-color: rgba(0, 0, 0, 0.9);
+                animation: fadeIn 0.3s;
+            }
+
+            .modal.show {
+                display: flex;
+                align-items: center;
+                justify-content: center;
+            }
+
+            @keyframes fadeIn {
+                from {
+                    opacity: 0;
+                }
+                to {
+                    opacity: 1;
+                }
+            }
+
+            .modal-content {
+                position: relative;
+                max-width: 90%;
+                max-height: 90%;
+                margin: auto;
+                animation: zoomIn 0.3s;
+            }
+
+            @keyframes zoomIn {
+                from {
+                    transform: scale(0.8);
+                    opacity: 0;
+                }
+                to {
+                    transform: scale(1);
+                    opacity: 1;
+                }
+            }
+
+            .modal-content img {
+                width: 100%;
+                height: auto;
+                max-height: 90vh;
+                object-fit: contain;
+                border-radius: 10px;
+                box-shadow: 0 10px 40px rgba(0, 0, 0, 0.5);
+            }
+
+            .modal-close {
+                position: absolute;
+                top: -40px;
+                right: 0;
+                color: #fff;
+                font-size: 40px;
+                font-weight: bold;
+                cursor: pointer;
+                background: rgba(0, 0, 0, 0.5);
+                border-radius: 50%;
+                width: 40px;
+                height: 40px;
+                display: flex;
+                align-items: center;
+                justify-content: center;
+                transition: background 0.2s;
+            }
+
+            .modal-close:hover {
+                background: rgba(0, 0, 0, 0.8);
+            }
+
+            @media (max-width: 768px) {
+                .result-grid {
+                    grid-template-columns: 1fr;
+                }
+            }
+
+            .input-section {
+                display: grid;
+                grid-template-columns: 1fr 1fr;
+                gap: 30px;
+                margin-bottom: 30px;
+            }
+
+            @media (max-width: 768px) {
+                .input-section {
+                    grid-template-columns: 1fr;
+                }
+            }
+
+            .loading {
+                text-align: center;
+                padding: 40px;
+                color: #667eea;
+            }
+
+            .spinner {
+                border: 4px solid #f3f3f3;
+                border-top: 4px solid #667eea;
+                border-radius: 50%;
+                width: 50px;
+                height: 50px;
+                animation: spin 1s linear infinite;
+                margin: 20px auto;
+            }
+
+            @keyframes spin {
+                0% {
+                    transform: rotate(0deg);
+                }
+                100% {
+                    transform: rotate(360deg);
+                }
+            }
+
+            .error {
+                background: #fee;
+                color: #c33;
+                padding: 15px;
+                border-radius: 10px;
+                margin-top: 20px;
+                border-left: 4px solid #c33;
+            }
+
+            .hidden {
+                display: none;
+            }
+
+            .status {
+                text-align: center;
+                padding: 20px;
+                color: #666;
+                font-size: 1.1em;
+            }
+        </style>
+    </head>
+    <body>
+        <div class="container">
+            <div class="header">
+                <h1>👔 Virtual Try-On</h1>
+                <p>Upload a person image and a product image to see how it looks</p>
+            </div>
+
+            <div class="content">
+                <div class="input-section">
+                    <div class="upload-section">
+                        <h2>👤 Person Image</h2>
+                        <div class="upload-area" id="personUploadArea">
+                            <div class="upload-icon">👤</div>
+                            <div class="upload-text">Click to upload or drag and drop</div>
+                            <div class="upload-hint">Supports: JPG, PNG, GIF, WEBP (max 10MB)</div>
+                            <input type="file" id="personFileInput" accept="image/*" />
+                            <div class="image-preview-container" id="personPreviewContainer"></div>
+                        </div>
+                    </div>
+
+                    <div class="upload-section">
+                        <h2>🛍️ Product Image</h2>
+                        <div class="upload-area" id="productUploadArea">
+                            <div class="upload-icon">🛍️</div>
+                            <div class="upload-text">Click to upload or drag and drop</div>
+                            <div class="upload-hint">Supports: JPG, PNG, GIF, WEBP (max 10MB)</div>
+                            <input type="file" id="productFileInput" accept="image/*" />
+                            <div class="image-preview-container" id="productPreviewContainer"></div>
+                        </div>
+                    </div>
+                </div>
+
+                <div style="text-align: center">
+                    <button class="btn" id="generateBtn" disabled>Generate Virtual Try-On</button>
+                </div>
+
+                <div id="status" class="status hidden"></div>
+                <div id="error" class="error hidden"></div>
+                <div id="loading" class="loading hidden">
+                    <div class="spinner"></div>
+                    <p>Generating virtual try-on... This may take a minute.</p>
+                </div>
+
+                <div id="results" class="results hidden">
+                    <div class="result-section">
+                        <h3>✨ Generated Results</h3>
+                        <div class="result-images" id="resultImages"></div>
+                    </div>
+                </div>
+            </div>
+        </div>
+
+        <!-- Modal for full-size image -->
+        <div id="imageModal" class="modal">
+            <div class="modal-content">
+                <span class="modal-close">&times;</span>
+                <img id="modalImage" src="" alt="Full size image" />
+            </div>
+        </div>
+
+        <script>
+            // ============================================================================
+            // Constants & Configuration
+            // ============================================================================
+            const API = {
+                VIRTUAL_TRY_ON: '/api/virtual-try-on',
+                RESULTS: '/api/results',
+            };
+
+            // ============================================================================
+            // DOM Elements
+            // ============================================================================
+            const elements = {
+                personUploadArea: document.getElementById('personUploadArea'),
+                personFileInput: document.getElementById('personFileInput'),
+                personPreviewContainer: document.getElementById('personPreviewContainer'),
+                productUploadArea: document.getElementById('productUploadArea'),
+                productFileInput: document.getElementById('productFileInput'),
+                productPreviewContainer: document.getElementById('productPreviewContainer'),
+                generateBtn: document.getElementById('generateBtn'),
+                resultsDiv: document.getElementById('results'),
+                resultImagesDiv: document.getElementById('resultImages'),
+                loadingDiv: document.getElementById('loading'),
+                errorDiv: document.getElementById('error'),
+                statusDiv: document.getElementById('status'),
+                imageModal: document.getElementById('imageModal'),
+                modalImage: document.getElementById('modalImage'),
+                modalClose: document.querySelector('.modal-close'),
+            };
+
+            // ============================================================================
+            // State Management
+            // ============================================================================
+            const state = {
+                personFile: null,
+                productFile: null,
+                personImagePreview: null,
+                productImagePreview: null,
+            };
+
+            // ============================================================================
+            // Utility Functions
+            // ============================================================================
+            const utils = {
+                escapeHtml(text) {
+                    const div = document.createElement('div');
+                    div.textContent = text;
+                    return div.innerHTML;
+                },
+            };
+
+            // ============================================================================
+            // UI Management
+            // ============================================================================
+            const ui = {
+                showError(message) {
+                    elements.errorDiv.textContent = message;
+                    elements.errorDiv.classList.remove('hidden');
+                },
+
+                hideError() {
+                    elements.errorDiv.classList.add('hidden');
+                },
+
+                showLoading(message = 'Processing...') {
+                    elements.loadingDiv.classList.remove('hidden');
+                    elements.statusDiv.classList.remove('hidden');
+                    elements.statusDiv.textContent = message;
+                },
+
+                hideLoading() {
+                    elements.loadingDiv.classList.add('hidden');
+                    elements.statusDiv.classList.add('hidden');
+                },
+
+                updateGenerateButton() {
+                    elements.generateBtn.disabled = !(state.personFile && state.productFile);
+                },
+            };
+
+            // ============================================================================
+            // File Handling
+            // ============================================================================
+            const fileHandler = {
+                handleFileSelect(file, type) {
+                    if (!file.type.startsWith('image/')) {
+                        ui.showError('Please select an image file');
+                        return;
+                    }
+
+                    const reader = new FileReader();
+                    reader.onload = (e) => {
+                        if (type === 'person') {
+                            state.personFile = file;
+                            state.personImagePreview = e.target.result;
+                            fileHandler.showImagePreview(
+                                state.personImagePreview,
+                                elements.personPreviewContainer,
+                                'person'
+                            );
+                            elements.personUploadArea.classList.add('has-image');
+                        } else {
+                            state.productFile = file;
+                            state.productImagePreview = e.target.result;
+                            fileHandler.showImagePreview(
+                                state.productImagePreview,
+                                elements.productPreviewContainer,
+                                'product'
+                            );
+                            elements.productUploadArea.classList.add('has-image');
+                        }
+                        ui.updateGenerateButton();
+                    };
+                    reader.readAsDataURL(file);
+                },
+
+                showImagePreview(imageSrc, container, type) {
+                    container.innerHTML = `
+                        <img src="${imageSrc}" alt="Preview" class="image-preview">
+                        <button class="remove-image" onclick="app.removeImage('${type}')">×</button>
+                    `;
+                },
+
+                removeImage(type) {
+                    if (type === 'person') {
+                        state.personFile = null;
+                        state.personImagePreview = null;
+                        elements.personPreviewContainer.innerHTML = '';
+                        elements.personFileInput.value = '';
+                        elements.personUploadArea.classList.remove('has-image');
+                    } else {
+                        state.productFile = null;
+                        state.productImagePreview = null;
+                        elements.productPreviewContainer.innerHTML = '';
+                        elements.productFileInput.value = '';
+                        elements.productUploadArea.classList.remove('has-image');
+                    }
+                    ui.updateGenerateButton();
+                },
+
+                clearAllImages() {
+                    // Clear person image
+                    state.personFile = null;
+                    state.personImagePreview = null;
+                    elements.personPreviewContainer.innerHTML = '';
+                    elements.personFileInput.value = '';
+                    elements.personUploadArea.classList.remove('has-image');
+
+                    // Clear product image
+                    state.productFile = null;
+                    state.productImagePreview = null;
+                    elements.productPreviewContainer.innerHTML = '';
+                    elements.productFileInput.value = '';
+                    elements.productUploadArea.classList.remove('has-image');
+
+                    // Update button state
+                    ui.updateGenerateButton();
+                },
+
+                setupFileInput(uploadArea, fileInput, type) {
+                    uploadArea.addEventListener('click', () => fileInput.click());
+
+                    uploadArea.addEventListener('dragover', (e) => {
+                        e.preventDefault();
+                        uploadArea.classList.add('dragover');
+                    });
+
+                    uploadArea.addEventListener('dragleave', () => {
+                        uploadArea.classList.remove('dragover');
+                    });
+
+                    uploadArea.addEventListener('drop', (e) => {
+                        e.preventDefault();
+                        uploadArea.classList.remove('dragover');
+                        if (e.dataTransfer.files.length > 0) {
+                            fileHandler.handleFileSelect(e.dataTransfer.files[0], type);
+                        }
+                    });
+
+                    fileInput.addEventListener('change', (e) => {
+                        if (e.target.files.length > 0) {
+                            fileHandler.handleFileSelect(e.target.files[0], type);
+                        }
+                    });
+                },
+            };
+
+            // ============================================================================
+            // API & Data Management
+            // ============================================================================
+            const api = {
+                async generateVirtualTryOn() {
+                    if (!state.personFile || !state.productFile) return;
+
+                    ui.hideError();
+                    ui.showLoading('Generating virtual try-on...');
+                    elements.generateBtn.disabled = true;
+                    elements.resultsDiv.classList.add('hidden');
+
+                    const formData = new FormData();
+                    formData.append('personImage', state.personFile);
+                    formData.append('productImage', state.productFile);
+                    formData.append('sampleCount', '1');
+
+                    try {
+                        const response = await fetch(API.VIRTUAL_TRY_ON, {
+                            method: 'POST',
+                            body: formData,
+                        });
+
+                        const data = await response.json();
+
+                        if (!response.ok) {
+                            throw new Error(data.error || 'Failed to generate virtual try-on');
+                        }
+
+                        // Clear upload areas after successful generation
+                        fileHandler.clearAllImages();
+
+                        results.displayResults(data);
+                        ui.hideLoading();
+                    } catch (error) {
+                        ui.showError(
+                            error.message || 'An error occurred while generating virtual try-on'
+                        );
+                        ui.hideLoading();
+                    } finally {
+                        elements.generateBtn.disabled = false;
+                    }
+                },
+
+                async loadAllResults() {
+                    try {
+                        const response = await fetch(API.RESULTS);
+                        if (!response.ok) {
+                            throw new Error('Failed to load results');
+                        }
+                        const data = await response.json();
+
+                        if (data.results && data.results.length > 0) {
+                            results.displayAllResults(data.results);
+                            elements.resultsDiv.classList.remove('hidden');
+                        } else {
+                            elements.resultsDiv.classList.add('hidden');
+                        }
+                    } catch (error) {
+                        console.error('Error loading results:', error);
+                    }
+                },
+            };
+
+            // ============================================================================
+            // Results Display
+            // ============================================================================
+            const results = {
+                displayResults(data) {
+                    if (!data.resultImages || data.resultImages.length === 0) {
+                        ui.showError('No results generated');
+                        return;
+                    }
+                    api.loadAllResults();
+                },
+
+                displayAllResults(resultsArray) {
+                    elements.resultImagesDiv.innerHTML = resultsArray
+                        .map(
+                            (result) => `
+                        <div class="result-card">
+                            <div class="result-grid">
+                                <div class="result-grid-item">
+                                    <h4>👤 Person</h4>
+                                    <img src="${utils.escapeHtml(result.personImageUrl)}" alt="Person Image" class="result-image-clickable" data-image-url="${utils.escapeHtml(result.personImageUrl)}">
+                                </div>
+                                <div class="result-grid-item">
+                                    <h4>🛍️ Product</h4>
+                                    <img src="${utils.escapeHtml(result.productImageUrl)}" alt="Product Image" class="result-image-clickable" data-image-url="${utils.escapeHtml(result.productImageUrl)}">
+                                </div>
+                                <div class="result-grid-item">
+                                    <h4>✨ Result</h4>
+                                    <img src="${utils.escapeHtml(result.resultImages[0])}" alt="Virtual Try-On Result" class="result-image-clickable" data-image-url="${utils.escapeHtml(result.resultImages[0])}">
+                                </div>
+                            </div>
+                        </div>
+                    `
+                        )
+                        .join('');
+
+                    // Scale all images to the smallest height after they load
+                    results.scaleImagesToSmallestHeight();
+
+                    // Add click handlers to all images (person, product, result)
+                    results.attachImageClickHandlers();
+                },
+
+                attachImageClickHandlers() {
+                    const clickableImages =
+                        elements.resultImagesDiv.querySelectorAll('.result-image-clickable');
+                    clickableImages.forEach((img) => {
+                        img.addEventListener('click', () => {
+                            const imageUrl = img.getAttribute('data-image-url');
+                            modal.open(imageUrl);
+                        });
+                    });
+                },
+
+                scaleImagesToSmallestHeight() {
+                    const resultCards = elements.resultImagesDiv.querySelectorAll('.result-card');
+
+                    resultCards.forEach((card) => {
+                        const images = Array.from(card.querySelectorAll('.result-grid-item img'));
+
+                        if (images.length !== 3) return; // Need exactly 3 images
+
+                        // Wait for all images to load
+                        let loadedCount = 0;
+                        const checkAndScale = () => {
+                            loadedCount++;
+                            if (loadedCount === images.length) {
+                                // Small delay to ensure rendering is complete
+                                setTimeout(() => {
+                                    let smallestHeight = Infinity;
+
+                                    // Get natural rendered heights (at 100% width)
+                                    images.forEach((img) => {
+                                        const currentHeight = img.offsetHeight;
+                                        if (currentHeight > 0 && currentHeight < smallestHeight) {
+                                            smallestHeight = currentHeight;
+                                        }
+                                    });
+
+                                    // Apply smallest height to all images
+                                    if (smallestHeight !== Infinity && smallestHeight > 0) {
+                                        images.forEach((img) => {
+                                            const aspectRatio =
+                                                img.naturalWidth / img.naturalHeight;
+                                            const newWidth = smallestHeight * aspectRatio;
+
+                                            img.style.height = `${smallestHeight}px`;
+                                            img.style.width = `${newWidth}px`;
+                                            img.style.objectFit = 'contain';
+                                            img.style.display = 'block';
+                                            img.style.margin = '0 auto';
+
+                                            // Preserve cursor pointer for clickable images
+                                            if (img.classList.contains('result-image-clickable')) {
+                                                img.style.cursor = 'pointer';
+                                            }
+                                        });
+                                    }
+                                }, 100);
+                            }
+                        };
+
+                        // Set up load handlers for each image
+                        images.forEach((img) => {
+                            if (img.complete && img.naturalHeight > 0) {
+                                checkAndScale();
+                            } else {
+                                img.addEventListener('load', checkAndScale, { once: true });
+                                img.addEventListener('error', checkAndScale, { once: true });
+                            }
+                        });
+                    });
+                },
+            };
+
+            // ============================================================================
+            // Modal Management
+            // ============================================================================
+            const modal = {
+                open(imageUrl) {
+                    elements.modalImage.src = imageUrl;
+                    elements.imageModal.classList.add('show');
+                    document.body.style.overflow = 'hidden'; // Prevent background scrolling
+                },
+
+                close() {
+                    elements.imageModal.classList.remove('show');
+                    document.body.style.overflow = ''; // Restore scrolling
+                },
+
+                init() {
+                    // Close on X button click
+                    elements.modalClose.addEventListener('click', () => {
+                        modal.close();
+                    });
+
+                    // Close on background click
+                    elements.imageModal.addEventListener('click', (e) => {
+                        if (e.target === elements.imageModal) {
+                            modal.close();
+                        }
+                    });
+
+                    // Close on ESC key
+                    document.addEventListener('keydown', (e) => {
+                        if (e.key === 'Escape' && elements.imageModal.classList.contains('show')) {
+                            modal.close();
+                        }
+                    });
+                },
+            };
+
+            // ============================================================================
+            // Application Initialization
+            // ============================================================================
+            const app = {
+                init() {
+                    fileHandler.setupFileInput(
+                        elements.personUploadArea,
+                        elements.personFileInput,
+                        'person'
+                    );
+                    fileHandler.setupFileInput(
+                        elements.productUploadArea,
+                        elements.productFileInput,
+                        'product'
+                    );
+                    elements.generateBtn.addEventListener('click', api.generateVirtualTryOn);
+                    modal.init();
+                    api.loadAllResults();
+                },
+
+                removeImage(type) {
+                    fileHandler.removeImage(type);
+                },
+            };
+
+            // Make removeImage available globally for onclick handlers
+            window.removeImage = app.removeImage;
+
+            // Start application
+            app.init();
+        </script>
+    </body>
+</html>
