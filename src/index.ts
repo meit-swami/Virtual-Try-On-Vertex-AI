@@ -313,7 +313,15 @@ function initializeApp(): void {
 const app = express();
 app.use(cors());
 app.use(express.json());
-app.use(express.static('public'));
+app.use(
+    express.static('public', {
+        setHeaders: (res) => {
+            if (process.env.NODE_ENV !== 'production') {
+                res.set('Cache-Control', 'no-store, no-cache, must-revalidate');
+            }
+        },
+    })
+);
 app.use('/uploads', express.static(PATHS.UPLOADS));
 app.use('/outputs', express.static(PATHS.OUTPUTS));
 
