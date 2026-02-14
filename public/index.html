@@ -378,15 +378,17 @@
 
             .result-grid {
                 display: grid;
-                grid-template-columns: 1fr 1fr 0.7fr;
+                grid-template-columns: 1fr 1fr 1fr;
                 gap: 15px;
                 padding: 20px;
-                align-items: start;
+                align-items: stretch;
             }
 
             .result-grid-item {
                 display: flex;
                 flex-direction: column;
+                min-width: 0;
+                overflow: hidden;
             }
 
             .result-grid-item h4 {
@@ -394,27 +396,33 @@
                 color: var(--accent);
                 font-size: 1em;
                 text-align: center;
+                flex-shrink: 0;
+            }
+
+            .result-grid-item .result-image-wrapper {
+                flex: 1;
+                min-height: 0;
+                display: flex;
+                align-items: center;
+                justify-content: center;
+                background: var(--bg-card);
+                border-radius: 10px;
+                border: 1px solid var(--border-light);
+                overflow: hidden;
+                aspect-ratio: 1;
             }
 
             .result-grid-item img {
                 width: 100%;
-                border-radius: 10px;
-                box-shadow: 0 2px 12px rgba(0, 0, 0, 0.08);
+                height: 100%;
                 object-fit: contain;
-                height: auto;
                 cursor: pointer;
                 transition: transform 0.2s;
+                border-radius: 10px;
             }
 
             .result-grid-item img:hover {
-                transform: scale(1.05);
-            }
-
-            .result-grid-item:last-child img {
-                width: auto;
-                margin: 0 auto;
-                object-fit: contain;
-                height: auto;
+                transform: scale(1.03);
             }
 
             /* Modal Styles */
@@ -447,10 +455,14 @@
 
             .modal-content {
                 position: relative;
-                max-width: 90%;
-                max-height: 90%;
+                max-width: 95%;
+                max-height: 95%;
                 margin: auto;
                 animation: zoomIn 0.3s;
+                display: flex;
+                flex-direction: column;
+                align-items: center;
+                gap: 12px;
             }
 
             @keyframes zoomIn {
@@ -464,13 +476,63 @@
                 }
             }
 
+            .modal-image-container {
+                overflow: auto;
+                max-width: 100%;
+                max-height: 80vh;
+                display: flex;
+                align-items: center;
+                justify-content: center;
+                border-radius: 10px;
+                background: rgba(0, 0, 0, 0.3);
+            }
+
             .modal-content img {
-                width: 100%;
+                max-width: 100%;
                 height: auto;
-                max-height: 90vh;
+                max-height: 80vh;
                 object-fit: contain;
                 border-radius: 10px;
                 box-shadow: 0 10px 40px rgba(0, 0, 0, 0.5);
+                transition: transform 0.15s ease-out;
+                transform-origin: center center;
+            }
+
+            .modal-zoom-controls {
+                display: flex;
+                align-items: center;
+                gap: 12px;
+                background: rgba(0, 0, 0, 0.6);
+                padding: 8px 16px;
+                border-radius: 24px;
+            }
+
+            .modal-zoom-btn {
+                background: var(--accent);
+                color: white;
+                border: none;
+                width: 36px;
+                height: 36px;
+                border-radius: 50%;
+                font-size: 24px;
+                line-height: 1;
+                cursor: pointer;
+                display: flex;
+                align-items: center;
+                justify-content: center;
+                transition: background 0.2s;
+                -webkit-tap-highlight-color: transparent;
+            }
+
+            .modal-zoom-btn:hover {
+                background: var(--accent-dark);
+            }
+
+            .modal-zoom-level {
+                color: white;
+                font-size: 0.9em;
+                min-width: 48px;
+                text-align: center;
             }
 
             .modal-close {
@@ -498,7 +560,15 @@
             @media (max-width: 768px) {
                 .modal-content {
                     max-width: 95%;
-                    max-height: 85%;
+                    max-height: 90%;
+                }
+                .modal-image-container {
+                    max-height: 70vh;
+                }
+                .modal-zoom-btn {
+                    width: 40px;
+                    height: 40px;
+                    font-size: 26px;
                 }
                 .modal-close {
                     top: -36px;
@@ -513,10 +583,18 @@
             @media (max-width: 480px) {
                 .modal-content {
                     max-width: 96%;
-                    max-height: 80%;
+                    max-height: 90%;
+                }
+                .modal-image-container {
+                    max-height: 60vh;
                 }
                 .modal-content img {
-                    max-height: 75vh;
+                    max-height: 60vh;
+                }
+                .modal-zoom-btn {
+                    width: 44px;
+                    height: 44px;
+                    font-size: 28px;
                 }
                 .modal-close {
                     top: -32px;
@@ -529,23 +607,32 @@
 
             @media (min-width: 769px) and (max-width: 1024px) {
                 .result-grid {
-                    grid-template-columns: 1fr 1fr;
+                    grid-template-columns: 1fr 1fr 1fr;
+                    gap: 12px;
+                    padding: 16px;
                 }
             }
 
             @media (max-width: 768px) {
                 .result-grid {
-                    grid-template-columns: 1fr;
-                    gap: 12px;
-                    padding: 16px;
+                    grid-template-columns: 1fr 1fr 1fr;
+                    gap: 10px;
+                    padding: 12px;
                 }
                 .result-grid-item h4 {
-                    font-size: 0.95em;
+                    font-size: 0.85em;
+                }
+                .result-grid-item .result-image-wrapper {
+                    aspect-ratio: 1;
+                    min-height: 80px;
+                    max-height: 110px;
                 }
             }
 
             @media (max-width: 480px) {
                 .result-grid {
+                    grid-template-columns: 1fr 1fr 1fr;
+                    gap: 8px;
                     padding: 12px;
                 }
                 .result-card {
@@ -553,6 +640,14 @@
                 }
                 .result-section h3 {
                     font-size: 1.15em;
+                }
+                .result-grid-item h4 {
+                    font-size: 0.75em;
+                }
+                .result-grid-item .result-image-wrapper {
+                    aspect-ratio: 1;
+                    min-height: 70px;
+                    max-height: 95px;
                 }
             }
 
@@ -686,11 +781,18 @@
             </footer>
         </div>
 
-        <!-- Modal for full-size image -->
+        <!-- Modal for full-size image with zoom -->
         <div id="imageModal" class="modal">
             <div class="modal-content">
-                <span class="modal-close">&times;</span>
-                <img id="modalImage" src="" alt="Full size image" />
+                <span class="modal-close" title="Close">&times;</span>
+                <div class="modal-zoom-controls">
+                    <button type="button" class="modal-zoom-btn modal-zoom-out" title="Zoom out">−</button>
+                    <span class="modal-zoom-level" id="modalZoomLevel">100%</span>
+                    <button type="button" class="modal-zoom-btn modal-zoom-in" title="Zoom in">+</button>
+                </div>
+                <div class="modal-image-container" id="modalImageContainer">
+                    <img id="modalImage" src="" alt="Full size image" />
+                </div>
             </div>
         </div>
 
@@ -721,7 +823,11 @@
                 statusDiv: document.getElementById('status'),
                 imageModal: document.getElementById('imageModal'),
                 modalImage: document.getElementById('modalImage'),
+                modalImageContainer: document.getElementById('modalImageContainer'),
                 modalClose: document.querySelector('.modal-close'),
+                modalZoomIn: document.querySelector('.modal-zoom-in'),
+                modalZoomOut: document.querySelector('.modal-zoom-out'),
+                modalZoomLevel: document.getElementById('modalZoomLevel'),
             };
 
             // ============================================================================
@@ -965,24 +1071,27 @@
                             <div class="result-grid">
                                 <div class="result-grid-item">
                                     <h4>👤 Person</h4>
-                                    <img src="${utils.escapeHtml(result.personImageUrl)}" alt="Person Image" class="result-image-clickable" data-image-url="${utils.escapeHtml(result.personImageUrl)}">
+                                    <div class="result-image-wrapper">
+                                        <img src="${utils.escapeHtml(result.personImageUrl)}" alt="Person Image" class="result-image-clickable" data-image-url="${utils.escapeHtml(result.personImageUrl)}">
+                                    </div>
                                 </div>
                                 <div class="result-grid-item">
                                     <h4>🛍️ Product</h4>
-                                    <img src="${utils.escapeHtml(result.productImageUrl)}" alt="Product Image" class="result-image-clickable" data-image-url="${utils.escapeHtml(result.productImageUrl)}">
+                                    <div class="result-image-wrapper">
+                                        <img src="${utils.escapeHtml(result.productImageUrl)}" alt="Product Image" class="result-image-clickable" data-image-url="${utils.escapeHtml(result.productImageUrl)}">
+                                    </div>
                                 </div>
                                 <div class="result-grid-item">
                                     <h4>✨ Result</h4>
-                                    <img src="${utils.escapeHtml(result.resultImages[0])}" alt="Virtual Try-On Result" class="result-image-clickable" data-image-url="${utils.escapeHtml(result.resultImages[0])}">
+                                    <div class="result-image-wrapper">
+                                        <img src="${utils.escapeHtml(result.resultImages[0])}" alt="Virtual Try-On Result" class="result-image-clickable" data-image-url="${utils.escapeHtml(result.resultImages[0])}">
+                                    </div>
                                 </div>
                             </div>
                         </div>
                     `
                         )
                         .join('');
-
-                    // Scale all images to the smallest height after they load
-                    results.scaleImagesToSmallestHeight();
 
                     // Add click handlers to all images (person, product, result)
                     results.attachImageClickHandlers();
@@ -998,102 +1107,82 @@
                         });
                     });
                 },
-
-                scaleImagesToSmallestHeight() {
-                    const resultCards = elements.resultImagesDiv.querySelectorAll('.result-card');
-
-                    resultCards.forEach((card) => {
-                        const images = Array.from(card.querySelectorAll('.result-grid-item img'));
-
-                        if (images.length !== 3) return; // Need exactly 3 images
-
-                        // Wait for all images to load
-                        let loadedCount = 0;
-                        const checkAndScale = () => {
-                            loadedCount++;
-                            if (loadedCount === images.length) {
-                                // Small delay to ensure rendering is complete
-                                setTimeout(() => {
-                                    let smallestHeight = Infinity;
-
-                                    // Get natural rendered heights (at 100% width)
-                                    images.forEach((img) => {
-                                        const currentHeight = img.offsetHeight;
-                                        if (currentHeight > 0 && currentHeight < smallestHeight) {
-                                            smallestHeight = currentHeight;
-                                        }
-                                    });
-
-                                    // Apply smallest height to all images
-                                    if (smallestHeight !== Infinity && smallestHeight > 0) {
-                                        images.forEach((img) => {
-                                            const aspectRatio =
-                                                img.naturalWidth / img.naturalHeight;
-                                            const newWidth = smallestHeight * aspectRatio;
-
-                                            img.style.height = `${smallestHeight}px`;
-                                            img.style.width = `${newWidth}px`;
-                                            img.style.objectFit = 'contain';
-                                            img.style.display = 'block';
-                                            img.style.margin = '0 auto';
-
-                                            // Preserve cursor pointer for clickable images
-                                            if (img.classList.contains('result-image-clickable')) {
-                                                img.style.cursor = 'pointer';
-                                            }
-                                        });
-                                    }
-                                }, 100);
-                            }
-                        };
-
-                        // Set up load handlers for each image
-                        images.forEach((img) => {
-                            if (img.complete && img.naturalHeight > 0) {
-                                checkAndScale();
-                            } else {
-                                img.addEventListener('load', checkAndScale, { once: true });
-                                img.addEventListener('error', checkAndScale, { once: true });
-                            }
-                        });
-                    });
-                },
             };
 
             // ============================================================================
             // Modal Management
             // ============================================================================
             const modal = {
+                zoomLevel: 1,
+                minZoom: 0.5,
+                maxZoom: 4,
+                zoomStep: 0.25,
+
                 open(imageUrl) {
                     elements.modalImage.src = imageUrl;
                     elements.imageModal.classList.add('show');
-                    document.body.style.overflow = 'hidden'; // Prevent background scrolling
+                    document.body.style.overflow = 'hidden';
+                    modal.zoomLevel = 1;
+                    modal.updateZoom();
                 },
 
                 close() {
                     elements.imageModal.classList.remove('show');
-                    document.body.style.overflow = ''; // Restore scrolling
+                    document.body.style.overflow = '';
+                    modal.zoomLevel = 1;
+                },
+
+                updateZoom() {
+                    elements.modalImage.style.transform = `scale(${modal.zoomLevel})`;
+                    if (elements.modalZoomLevel) {
+                        elements.modalZoomLevel.textContent = Math.round(modal.zoomLevel * 100) + '%';
+                    }
+                },
+
+                zoomIn() {
+                    modal.zoomLevel = Math.min(modal.maxZoom, modal.zoomLevel + modal.zoomStep);
+                    modal.updateZoom();
+                },
+
+                zoomOut() {
+                    modal.zoomLevel = Math.max(modal.minZoom, modal.zoomLevel - modal.zoomStep);
+                    modal.updateZoom();
                 },
 
                 init() {
-                    // Close on X button click
-                    elements.modalClose.addEventListener('click', () => {
-                        modal.close();
-                    });
+                    elements.modalClose.addEventListener('click', () => modal.close());
 
-                    // Close on background click
                     elements.imageModal.addEventListener('click', (e) => {
-                        if (e.target === elements.imageModal) {
-                            modal.close();
-                        }
+                        if (e.target === elements.imageModal) modal.close();
                     });
 
-                    // Close on ESC key
                     document.addEventListener('keydown', (e) => {
                         if (e.key === 'Escape' && elements.imageModal.classList.contains('show')) {
                             modal.close();
                         }
                     });
+
+                    if (elements.modalZoomIn) {
+                        elements.modalZoomIn.addEventListener('click', (e) => {
+                            e.stopPropagation();
+                            modal.zoomIn();
+                        });
+                    }
+                    if (elements.modalZoomOut) {
+                        elements.modalZoomOut.addEventListener('click', (e) => {
+                            e.stopPropagation();
+                            modal.zoomOut();
+                        });
+                    }
+
+                    if (elements.modalImageContainer) {
+                        elements.modalImageContainer.addEventListener('wheel', (e) => {
+                            if (!elements.imageModal.classList.contains('show')) return;
+                            e.preventDefault();
+                            if (e.deltaY < 0) modal.zoomIn();
+                            else modal.zoomOut();
+                        }, { passive: false });
+                    }
                 },
             };
 
