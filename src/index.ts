@@ -5,7 +5,10 @@ import multer from 'multer';
 import cors from 'cors';
 import fs from 'fs';
 import path from 'path';
+import https from 'https';
+import http from 'http';
 import { GoogleAuth } from 'google-auth-library';
+import * as cheerio from 'cheerio';
 
 // Load environment variables
 dotenv.config();
@@ -368,6 +371,19 @@ const upload = multer({
 // API Routes
 // ============================================================================
 
+async function downloadImageToFile(imageUrl: string, destPath: string): Promise<void> {
+    const url = new URL(imageUrl);
+    const lib = url.protocol === 'https:' ? https : http;
+    await new Promise<void>((resolve, reject) => {
+        const req2 = lib.get(imageUrl, { headers: { 'User-Agent': 'Mozilla/5.0' } }, (r) => {
+            const file = fs.createWriteStream(destPath);
+            r.pipe(file);
+            file.on('finish', () => { file.close(); resolve(); });
+        });
+        req2.on('error', reject);
+    });
+}
+
 app.post(
     '/api/virtual-try-on',
     upload.fields([
@@ -376,28 +392,36 @@ app.post(
     ]),
     async (req: Request, res: Response) => {
         try {
-            const files = req.files as { [fieldname: string]: Express.Multer.File[] };
+            const files = (req.files || {}) as { [fieldname: string]: Express.Multer.File[] };
+            const body = req.body as { productImageUrl?: string };
+            const generationId = Date.now();
 
-            if (!files.personImage?.[0] || !files.productImage?.[0]) {
-                return res
-                    .status(400)
-                    .json({ error: 'Both person and product images are required' });
+            if (!files.personImage?.[0]) {
+                return res.status(400).json({ error: 'Person image is required' });
             }
 
             const personImage = files.personImage[0];
-            const productImage = files.productImage[0];
-            const generationId = Date.now();
-
-            // Rename files with generation ID
             const personExt = path.extname(personImage.filename);
             const personNewFilename = `person-${generationId}${personExt}`;
             const personNewPath = path.join(PATHS.UPLOADS, personNewFilename);
             fs.renameSync(personImage.path, personNewPath);
 
-            const productExt = path.extname(productImage.filename);
-            const productNewFilename = `product-${generationId}${productExt}`;
-            const productNewPath = path.join(PATHS.UPLOADS, productNewFilename);
-            fs.renameSync(productImage.path, productNewPath);
+            let productNewPath: string;
+            let productNewFilename: string;
+
+            if (files.productImage?.[0]) {
+                const productImage = files.productImage[0];
+                const productExt = path.extname(productImage.filename);
+                productNewFilename = `product-${generationId}${productExt}`;
+                productNewPath = path.join(PATHS.UPLOADS, productNewFilename);
+                fs.renameSync(productImage.path, productNewPath);
+            } else if (body.productImageUrl && typeof body.productImageUrl === 'string') {
+                productNewFilename = `product-${generationId}.jpg`;
+                productNewPath = path.join(PATHS.UPLOADS, productNewFilename);
+                await downloadImageToFile(body.productImageUrl, productNewPath);
+            } else {
+                return res.status(400).json({ error: 'Product image (file or URL) is required' });
+            }
 
             // Get and validate sample count
             const sampleCount = parseInt(req.body.sampleCount || '1', 10);
@@ -440,6 +464,72 @@ app.post(
         }
     }
 );
+
+// Extract product image from e-commerce URL
+app.post('/api/extract-product', async (req: Request, res: Response) => {
+    try {
+        const { url } = req.body as { url?: string };
+        if (!url || typeof url !== 'string') {
+            return res.status(400).json({ error: 'URL is required' });
+        }
+        const parsed = new URL(url);
+        if (!['http:', 'https:'].includes(parsed.protocol)) {
+            return res.status(400).json({ error: 'Invalid URL protocol' });
+        }
+
+        const html = await new Promise<string>((resolve, reject) => {
+            const lib = parsed.protocol === 'https:' ? https : http;
+            const req2 = lib.get(url, { headers: { 'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36' } }, (r) => {
+                let data = '';
+                r.on('data', (ch) => { data += ch; });
+                r.on('end', () => resolve(data));
+            });
+            req2.on('error', reject);
+            req2.setTimeout(10000, () => { req2.destroy(); reject(new Error('Request timeout')); });
+        });
+
+        const $ = cheerio.load(html);
+        let productImageUrl: string | null = null;
+
+        // Try og:image first (common for product pages)
+        const ogImage = $('meta[property="og:image"]').attr('content');
+        if (ogImage) {
+            productImageUrl = ogImage.startsWith('//') ? 'https:' + ogImage : ogImage;
+        }
+
+        // Fallback: find largest product-like image (common selectors)
+        if (!productImageUrl) {
+            const selectors = [
+                'img[data-product-image]', 'img.product-image', '.product img', '.product-image img',
+                '[class*="product"] img', '[id*="product"] img', 'main img', '.gallery img'
+            ];
+            const candidates: { src: string; size: number }[] = [];
+            for (const sel of selectors) {
+                $(sel).each((_, el) => {
+                    const src = $(el).attr('src');
+                    if (src && !src.includes('logo') && !src.includes('avatar')) {
+                        const w = parseInt(String($(el).attr('width') || '0'), 10) || 200;
+                        const h = parseInt(String($(el).attr('height') || '0'), 10) || 200;
+                        const size = w * h;
+                        const fullSrc = src.startsWith('//') ? 'https:' + src : src.startsWith('/') ? parsed.origin + src : src;
+                        candidates.push({ src: fullSrc, size });
+                    }
+                });
+            }
+            const bestImg = candidates.sort((a, b) => b.size - a.size)[0];
+            if (bestImg) productImageUrl = bestImg.src;
+        }
+
+        if (!productImageUrl) {
+            return res.status(404).json({ error: 'Could not find product image on this page' });
+        }
+
+        res.json({ productImageUrl });
+    } catch (error: any) {
+        console.error('Error extracting product:', error);
+        res.status(500).json({ error: error.message || 'Failed to extract product image' });
+    }
+});
 
 app.get('/api/results', (_req: Request, res: Response) => {
     try {

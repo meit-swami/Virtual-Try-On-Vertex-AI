@@ -717,6 +717,288 @@
                 display: none;
             }
 
+            /* ========== App Nav & Page Sections ========== */
+            .app-nav {
+                position: sticky;
+                top: 0;
+                z-index: 100;
+                background: var(--bg-card);
+                border-bottom: 1px solid var(--border-light);
+                padding: 12px 24px;
+                display: flex;
+                align-items: center;
+                justify-content: space-between;
+                box-shadow: 0 2px 8px rgba(0,0,0,0.04);
+            }
+            .app-nav-brand {
+                font-size: 1.5em;
+                font-weight: 700;
+                background: linear-gradient(135deg, var(--accent) 0%, var(--accent-dark) 100%);
+                -webkit-background-clip: text;
+                -webkit-text-fill-color: transparent;
+                cursor: pointer;
+                transition: opacity 0.2s;
+            }
+            .app-nav-brand:hover { opacity: 0.85; }
+            .app-nav-links {
+                display: flex;
+                gap: 20px;
+            }
+            .app-nav-links a {
+                color: var(--text-secondary);
+                text-decoration: none;
+                font-weight: 500;
+                transition: color 0.2s;
+            }
+            .app-nav-links a:hover, .app-nav-links a.active {
+                color: var(--accent);
+            }
+            .page-section {
+                display: none;
+                animation: pageFadeIn 0.4s ease-out;
+            }
+            .page-section.active {
+                display: block;
+            }
+            @keyframes pageFadeIn {
+                from { opacity: 0; transform: translateY(8px); }
+                to { opacity: 1; transform: translateY(0); }
+            }
+
+            /* ========== Landing Page ========== */
+            .landing-hero {
+                text-align: center;
+                padding: 60px 24px;
+                background: linear-gradient(180deg, rgba(56,193,183,0.06) 0%, transparent 100%);
+            }
+            .landing-hero h1 {
+                font-size: 3em;
+                margin-bottom: 16px;
+                background: linear-gradient(135deg, var(--accent) 0%, var(--accent-dark) 100%);
+                -webkit-background-clip: text;
+                -webkit-text-fill-color: transparent;
+                animation: heroFade 0.8s ease-out;
+            }
+            @keyframes heroFade {
+                from { opacity: 0; transform: translateY(-20px); }
+                to { opacity: 1; transform: translateY(0); }
+            }
+            .landing-hero p {
+                color: var(--text-secondary);
+                font-size: 1.2em;
+                max-width: 520px;
+                margin: 0 auto 32px;
+                animation: heroFade 0.8s ease-out 0.15s both;
+            }
+            .landing-hero .btn {
+                max-width: 280px;
+                margin: 0 auto;
+                animation: heroFade 0.8s ease-out 0.3s both;
+            }
+            .landing-categories { padding: 40px 24px; max-width: 1100px; margin: 0 auto; }
+            .landing-categories h2 {
+                text-align: center;
+                font-size: 1.8em;
+                margin-bottom: 8px;
+                color: var(--text-primary);
+            }
+            .landing-categories .subtitle {
+                text-align: center;
+                color: var(--text-secondary);
+                margin-bottom: 28px;
+            }
+            .category-tabs {
+                display: flex;
+                flex-wrap: wrap;
+                justify-content: center;
+                gap: 8px;
+                margin-bottom: 28px;
+                padding: 8px;
+                background: var(--bg-subtle);
+                border-radius: 14px;
+                border: 1px solid var(--border-light);
+                box-shadow: inset 0 1px 2px rgba(0,0,0,0.04);
+            }
+            .category-tab {
+                padding: 10px 18px;
+                border: none;
+                background: transparent;
+                border-radius: 10px;
+                font-size: 0.95em;
+                font-weight: 500;
+                color: var(--text-secondary);
+                cursor: pointer;
+                transition: all 0.25s ease;
+                display: flex;
+                align-items: center;
+                gap: 6px;
+            }
+            .category-tab:hover {
+                color: var(--accent);
+                background: rgba(56,193,183,0.1);
+            }
+            .category-tab.active {
+                background: var(--accent);
+                color: white;
+            }
+            .category-panel {
+                display: none;
+                animation: panelFade 0.3s ease;
+            }
+            .category-panel.active {
+                display: block;
+            }
+            @keyframes panelFade {
+                from { opacity: 0; }
+                to { opacity: 1; }
+            }
+            .category-panel h3 {
+                font-size: 1.1em;
+                color: var(--text-primary);
+                margin-bottom: 4px;
+            }
+            .category-panel .cat-subtitle {
+                font-size: 0.9em;
+                color: var(--text-secondary);
+                margin-bottom: 20px;
+            }
+            .samples-grid {
+                display: grid;
+                grid-template-columns: repeat(auto-fill, minmax(120px, 1fr));
+                gap: 16px;
+            }
+            .sample-item {
+                aspect-ratio: 1;
+                border-radius: 14px;
+                overflow: hidden;
+                border: 2px solid var(--border-light);
+                cursor: pointer;
+                transition: all 0.25s ease;
+                box-shadow: 0 2px 8px rgba(0,0,0,0.04);
+            }
+            .sample-item:hover {
+                border-color: var(--accent);
+                transform: scale(1.06);
+                box-shadow: 0 8px 24px rgba(56,193,183,0.25);
+            }
+            .sample-item img {
+                width: 100%;
+                height: 100%;
+                object-fit: cover;
+            }
+            .ecommerce-zone {
+                margin: 48px 24px;
+                padding: 32px;
+                border: 2px dashed var(--accent);
+                border-radius: 16px;
+                background: rgba(56,193,183,0.04);
+                text-align: center;
+            }
+            .ecommerce-zone h3 { margin-bottom: 8px; color: var(--text-primary); }
+            .ecommerce-zone p { color: var(--text-secondary); margin-bottom: 16px; }
+            .ecommerce-zone input {
+                width: 100%;
+                max-width: 480px;
+                padding: 12px 16px;
+                border: 1px solid var(--border-light);
+                border-radius: 8px;
+                margin-bottom: 12px;
+                font-size: 1em;
+            }
+            .ecommerce-zone .btn { max-width: 200px; margin: 0 auto; }
+            @media (max-width: 600px) {
+                .landing-hero h1 { font-size: 2em; }
+                .landing-hero p { font-size: 1em; }
+                .category-tabs { gap: 6px; padding: 4px; }
+                .category-tab { padding: 8px 12px; font-size: 0.85em; }
+                .samples-grid { grid-template-columns: repeat(4, 1fr); gap: 10px; }
+                .ecommerce-zone { margin: 24px 16px; padding: 20px; }
+            }
+
+            /* ========== Subscription Page ========== */
+            .subscription-page { padding: 40px 24px; }
+            .subscription-page h2 {
+                text-align: center;
+                font-size: 2em;
+                margin-bottom: 8px;
+                color: var(--text-primary);
+            }
+            .subscription-page .subtitle {
+                text-align: center;
+                color: var(--text-secondary);
+                margin-bottom: 8px;
+            }
+            .subscription-page .eNach-note {
+                text-align: center;
+                color: var(--text-secondary);
+                font-size: 0.95em;
+                margin-bottom: 24px;
+            }
+            .price-tabs {
+                display: flex;
+                justify-content: center;
+                gap: 0;
+                margin-bottom: 28px;
+                background: var(--border-light);
+                padding: 4px;
+                border-radius: 12px;
+                max-width: 280px;
+                margin-left: auto;
+                margin-right: auto;
+            }
+            .price-tabs button {
+                flex: 1;
+                padding: 12px 24px;
+                border: none;
+                background: transparent;
+                border-radius: 10px;
+                font-size: 1em;
+                font-weight: 600;
+                color: var(--text-secondary);
+                cursor: pointer;
+                transition: background 0.2s, color 0.2s;
+            }
+            .price-tabs button:hover { color: var(--text-primary); }
+            .price-tabs button.active {
+                background: var(--bg-card);
+                color: var(--accent);
+                box-shadow: 0 2px 8px rgba(0,0,0,0.06);
+            }
+            .plans-grid {
+                display: grid;
+                grid-template-columns: repeat(auto-fit, minmax(260px, 1fr));
+                gap: 24px;
+                max-width: 900px;
+                margin: 0 auto;
+            }
+            .plan-card {
+                background: var(--bg-card);
+                border: 1px solid var(--border-light);
+                border-radius: 16px;
+                padding: 32px;
+                text-align: center;
+                transition: box-shadow 0.3s, border-color 0.2s;
+            }
+            .plan-card.featured {
+                border-color: var(--accent);
+                box-shadow: 0 8px 24px rgba(56,193,183,0.2);
+            }
+            .plan-card h3 { margin-bottom: 4px; color: var(--text-primary); }
+            .plan-card .plan-desc {
+                font-size: 0.9em;
+                color: var(--text-secondary);
+                margin-bottom: 16px;
+            }
+            .plan-card .price-row { margin: 16px 0; text-align: center; }
+            .plan-card .price-view { display: none; }
+            .plan-card .price-view.active { display: block; }
+            .plan-card .price { font-size: 1.75em; font-weight: 700; color: var(--accent); }
+            .plan-card .price-unit { font-size: 0.65em; font-weight: 400; color: var(--text-secondary); }
+            .plan-card ul { list-style: none; text-align: left; color: var(--text-secondary); }
+            .plan-card ul li { padding: 8px 0; padding-left: 24px; position: relative; }
+            .plan-card ul li::before { content: "✓"; color: var(--success); position: absolute; left: 0; }
+            .plan-card .btn { margin-top: 20px; width: 100%; }
+
             .status {
                 text-align: center;
                 padding: 20px;
@@ -726,9 +1008,47 @@
         </style>
     </head>
     <body>
+        <nav class="app-nav">
+            <span class="app-nav-brand" id="navBrand">ZAHA AI</span>
+            <div class="app-nav-links">
+                <a href="#" class="nav-link active" data-page="landing">Home</a>
+                <a href="#" class="nav-link" data-page="try-on">Try On</a>
+                <a href="#" class="nav-link" data-page="subscription">Subscription</a>
+            </div>
+        </nav>
+
+        <!-- Landing Page -->
+        <section id="page-landing" class="page-section active">
+            <div class="landing-hero">
+                <h1>Virtual Try-On, Reimagined</h1>
+                <p>See how clothes, jewellery, eyewear and more look on you before you buy. Try samples from our closet or paste any e-commerce product link.</p>
+                <button class="btn" id="heroTryBtn">Start Try-On</button>
+            </div>
+            <div class="landing-categories">
+                <h2>Browse Sample Closet</h2>
+                <p class="subtitle">Choose a category and click any sample to try it on</p>
+                <div id="categoryTabs" class="category-tabs"></div>
+                <div id="categoryPanels"></div>
+            </div>
+            <div class="ecommerce-zone" id="ecommerceZone">
+                <h3>🛒 Drop an E-commerce Product Link</h3>
+                <p>Paste any product page URL and we'll extract the product image for virtual try-on</p>
+                <input type="url" id="productUrlInput" placeholder="https://example.com/product/..." />
+                <button class="btn" id="extractProductBtn">Extract & Try On</button>
+                <div id="extractStatus" class="hidden" style="margin-top:12px;color:var(--accent);"></div>
+                <div id="extractError" class="hidden" style="margin-top:12px;color:#dc2626;"></div>
+            </div>
+            <footer class="footer">
+                <p>Made by Brandzaha with ❤️</p>
+                <p class="footer-credit">Made, designed and developed by HIMANSHI SHRIVASTAV</p>
+            </footer>
+        </section>
+
+        <!-- Try-On Page -->
+        <section id="page-try-on" class="page-section">
         <div class="container">
             <div class="header">
-                <h1>👔 ZAHA AI</h1>
+                <h1>👔 Direct Virtual Try-On</h1>
                 <p>Upload a person image and a product image to see how it looks</p>
             </div>
 
@@ -780,6 +1100,66 @@
                 <p class="footer-credit">Made, designed and developed by HIMANSHI SHRIVASTAV</p>
             </footer>
         </div>
+        </section>
+
+        <!-- Subscription Page -->
+        <section id="page-subscription" class="page-section">
+            <div class="subscription-page">
+                <h2>Choose Your Plan</h2>
+                <p class="subtitle">Unlock more virtual try-ons and premium features</p>
+                <p class="eNach-note"><strong>Note:</strong> With eNach system for monthly plans</p>
+                <div class="price-tabs">
+                    <button type="button" class="price-tab active" data-billing="monthly">Monthly</button>
+                    <button type="button" class="price-tab" data-billing="yearly">Yearly</button>
+                </div>
+                <div class="plans-grid">
+                    <div class="plan-card">
+                        <h3>Small Enterprises</h3>
+                        <p class="plan-desc">Street shops, local shops</p>
+                        <div class="price-row">
+                            <div class="price-view active" data-billing="monthly"><span class="price">₹1,500</span><span class="price-unit">/mo</span></div>
+                            <div class="price-view" data-billing="yearly"><span class="price">₹15,000</span><span class="price-unit"> one time</span></div>
+                        </div>
+                        <ul>
+                            <li>5 try-ons per month</li>
+                            <li>Sample closet access</li>
+                            <li>Standard quality</li>
+                        </ul>
+                        <button class="btn">Select Plan</button>
+                    </div>
+                    <div class="plan-card featured">
+                        <h3>Medium Enterprises</h3>
+                        <p class="plan-desc">Custom designer, boutiques</p>
+                        <div class="price-row">
+                            <div class="price-view active" data-billing="monthly"><span class="price">₹2,000</span><span class="price-unit">/mo</span></div>
+                            <div class="price-view" data-billing="yearly"><span class="price">₹21,500</span><span class="price-unit"> one time</span></div>
+                        </div>
+                        <ul>
+                            <li>Unlimited try-ons</li>
+                            <li>Sample closet access</li>
+                            <li>HD quality output</li>
+                            <li>E-commerce URL extraction</li>
+                        </ul>
+                        <button class="btn">Select Plan</button>
+                    </div>
+                    <div class="plan-card">
+                        <h3>Large Enterprises</h3>
+                        <p class="plan-desc">Maxx, Reliance Lifestyle, Westside, Zudio, Tata Trends</p>
+                        <div class="price-row">
+                            <div class="price-view active" data-billing="monthly"><span class="price">₹4,000</span><span class="price-unit">/mo</span></div>
+                            <div class="price-view" data-billing="yearly"><span class="price">₹45,000</span><span class="price-unit"> one time</span></div>
+                        </div>
+                        <ul>
+                            <li>Everything in Medium</li>
+                            <li>API access</li>
+                            <li>Bulk processing</li>
+                            <li>Dedicated support</li>
+                        </ul>
+                        <button class="btn">Select Plan</button>
+                    </div>
+                </div>
+            </div>
+        </section>
 
         <!-- Modal for full-size image with zoom -->
         <div id="imageModal" class="modal">
@@ -803,6 +1183,159 @@
             const API = {
                 VIRTUAL_TRY_ON: '/api/virtual-try-on',
                 RESULTS: '/api/results',
+                EXTRACT_PRODUCT: '/api/extract-product',
+                SAMPLES: '/samples.json',
+            };
+
+            let prefillProductUrl = null;
+
+            // ============================================================================
+            // Page Navigation
+            // ============================================================================
+            const navigation = {
+                show(pageId) {
+                    document.querySelectorAll('.page-section').forEach(el => el.classList.remove('active'));
+                    document.querySelectorAll('.nav-link').forEach(el => el.classList.remove('active'));
+                    const page = document.getElementById('page-' + pageId);
+                    const link = document.querySelector('.nav-link[data-page="' + pageId + '"]');
+                    if (page) page.classList.add('active');
+                    if (link) link.classList.add('active');
+                },
+                init() {
+                    document.getElementById('navBrand').addEventListener('click', () => navigation.show('landing'));
+                    document.querySelectorAll('.nav-link').forEach(link => {
+                        link.addEventListener('click', (e) => {
+                            e.preventDefault();
+                            navigation.show(link.getAttribute('data-page'));
+                        });
+                    });
+                    document.getElementById('heroTryBtn').addEventListener('click', () => navigation.show('try-on'));
+                },
+            };
+
+            // ============================================================================
+            // Subscription Page - Price Tabs (Monthly / Yearly)
+            // ============================================================================
+            const priceTabs = {
+                switchTo(billing) {
+                    document.querySelectorAll('.price-tab').forEach(btn => {
+                        btn.classList.toggle('active', btn.dataset.billing === billing);
+                    });
+                    document.querySelectorAll('.plan-card .price-view').forEach(view => {
+                        view.classList.toggle('active', view.dataset.billing === billing);
+                    });
+                },
+                init() {
+                    document.querySelectorAll('.price-tab').forEach(btn => {
+                        btn.addEventListener('click', () => priceTabs.switchTo(btn.dataset.billing));
+                    });
+                },
+            };
+
+            // ============================================================================
+            // Landing Page - Categories & Samples
+            // ============================================================================
+            const landing = {
+                categories: [],
+                activeTabIndex: 0,
+
+                async loadCategories() {
+                    try {
+                        const res = await fetch(API.SAMPLES);
+                        const data = await res.json();
+                        landing.categories = data.categories;
+
+                        const tabsContainer = document.getElementById('categoryTabs');
+                        const panelsContainer = document.getElementById('categoryPanels');
+
+                        if (!tabsContainer || !panelsContainer) return;
+
+                        tabsContainer.innerHTML = data.categories.map((cat, idx) => `
+                            <button type="button" class="category-tab ${idx === 0 ? 'active' : ''}" data-index="${idx}">
+                                ${cat.icon} ${cat.name}
+                            </button>
+                        `).join('');
+
+                        panelsContainer.innerHTML = data.categories.map((cat, idx) => `
+                            <div class="category-panel ${idx === 0 ? 'active' : ''}" data-index="${idx}">
+                                <h3>${cat.icon} ${cat.name}</h3>
+                                <p class="cat-subtitle">${cat.subtitle}</p>
+                                <div class="samples-grid">
+                                    ${cat.samples.map((url, i) => `
+                                        <div class="sample-item" data-url="${url}">
+                                            <img src="${url}" alt="Sample ${i+1}" loading="lazy" />
+                                        </div>
+                                    `).join('')}
+                                </div>
+                            </div>
+                        `).join('');
+
+                        tabsContainer.querySelectorAll('.category-tab').forEach(btn => {
+                            btn.addEventListener('click', () => {
+                                const idx = parseInt(btn.dataset.index, 10);
+                                landing.activeTabIndex = idx;
+                                tabsContainer.querySelectorAll('.category-tab').forEach(b => b.classList.remove('active'));
+                                panelsContainer.querySelectorAll('.category-panel').forEach(p => p.classList.remove('active'));
+                                btn.classList.add('active');
+                                panelsContainer.querySelector(`.category-panel[data-index="${idx}"]`)?.classList.add('active');
+                            });
+                        });
+
+                        panelsContainer.querySelectorAll('.sample-item').forEach(el => {
+                            el.addEventListener('click', () => {
+                                prefillProductUrl = el.dataset.url;
+                                navigation.show('try-on');
+                                fileHandler.setProductFromUrl(prefillProductUrl);
+                            });
+                        });
+                    } catch (err) {
+                        console.error('Failed to load samples:', err);
+                        const tabs = document.getElementById('categoryTabs');
+                        const panels = document.getElementById('categoryPanels');
+                        if (tabs) tabs.innerHTML = '';
+                        if (panels) panels.innerHTML = '<p style="text-align:center;color:var(--text-secondary);">Sample closet loading soon. Use Direct Try-On for now.</p>';
+                    }
+                },
+            };
+
+            // ============================================================================
+            // E-commerce URL Extraction
+            // ============================================================================
+            const ecommerce = {
+                async extractAndTryOn() {
+                    const input = document.getElementById('productUrlInput');
+                    const statusEl = document.getElementById('extractStatus');
+                    const errorEl = document.getElementById('extractError');
+                    const url = input?.value?.trim();
+                    if (!url) {
+                        errorEl.textContent = 'Please enter a product page URL';
+                        errorEl.classList.remove('hidden');
+                        statusEl.classList.add('hidden');
+                        return;
+                    }
+                    statusEl.textContent = 'Extracting product image...';
+                    statusEl.classList.remove('hidden');
+                    errorEl.classList.add('hidden');
+                    document.getElementById('extractProductBtn').disabled = true;
+                    try {
+                        const res = await fetch(API.EXTRACT_PRODUCT, {
+                            method: 'POST',
+                            headers: { 'Content-Type': 'application/json' },
+                            body: JSON.stringify({ url }),
+                        });
+                        const data = await res.json();
+                        if (!res.ok) throw new Error(data.error || 'Extraction failed');
+                        prefillProductUrl = data.productImageUrl;
+                        statusEl.classList.add('hidden');
+                        navigation.show('try-on');
+                        fileHandler.setProductFromUrl(prefillProductUrl);
+                    } catch (err) {
+                        statusEl.classList.add('hidden');
+                        errorEl.textContent = err.message || 'Could not extract product from URL';
+                        errorEl.classList.remove('hidden');
+                    }
+                    document.getElementById('extractProductBtn').disabled = false;
+                },
             };
 
             // ============================================================================
@@ -876,7 +1409,17 @@
                 },
 
                 updateGenerateButton() {
-                    elements.generateBtn.disabled = !(state.personFile && state.productFile);
+                    const hasProduct = state.productFile || prefillProductUrl;
+                    elements.generateBtn.disabled = !(state.personFile && hasProduct);
+                },
+
+                showStatus(message) {
+                    elements.statusDiv.textContent = message;
+                    elements.statusDiv.classList.remove('hidden');
+                },
+
+                hideStatus() {
+                    elements.statusDiv.classList.add('hidden');
                 },
             };
 
@@ -902,6 +1445,7 @@
                             );
                             elements.personUploadArea.classList.add('has-image');
                         } else {
+                            prefillProductUrl = null;
                             state.productFile = file;
                             state.productImagePreview = e.target.result;
                             fileHandler.showImagePreview(
@@ -933,10 +1477,20 @@
                     } else {
                         state.productFile = null;
                         state.productImagePreview = null;
+                        prefillProductUrl = null;
                         elements.productPreviewContainer.innerHTML = '';
                         elements.productFileInput.value = '';
                         elements.productUploadArea.classList.remove('has-image');
                     }
+                    ui.updateGenerateButton();
+                },
+
+                setProductFromUrl(url) {
+                    prefillProductUrl = url;
+                    state.productFile = null;
+                    state.productImagePreview = url;
+                    fileHandler.showImagePreview(url, elements.productPreviewContainer, 'product');
+                    elements.productUploadArea.classList.add('has-image');
                     ui.updateGenerateButton();
                 },
 
@@ -951,6 +1505,7 @@
                     // Clear product image
                     state.productFile = null;
                     state.productImagePreview = null;
+                    prefillProductUrl = null;
                     elements.productPreviewContainer.innerHTML = '';
                     elements.productFileInput.value = '';
                     elements.productUploadArea.classList.remove('has-image');
@@ -981,6 +1536,7 @@
 
                     fileInput.addEventListener('change', (e) => {
                         if (e.target.files.length > 0) {
+                            if (type === 'product') prefillProductUrl = null;
                             fileHandler.handleFileSelect(e.target.files[0], type);
                         }
                     });
@@ -992,7 +1548,8 @@
             // ============================================================================
             const api = {
                 async generateVirtualTryOn() {
-                    if (!state.personFile || !state.productFile) return;
+                    const hasProduct = state.productFile || prefillProductUrl;
+                    if (!state.personFile || !hasProduct) return;
 
                     ui.hideError();
                     ui.showLoading('Generating virtual try-on...');
@@ -1001,7 +1558,21 @@
 
                     const formData = new FormData();
                     formData.append('personImage', state.personFile);
-                    formData.append('productImage', state.productFile);
+                    let productFile = state.productFile;
+                    if (!productFile && prefillProductUrl) {
+                        try {
+                            const imgRes = await fetch(prefillProductUrl);
+                            const blob = await imgRes.blob();
+                            productFile = new File([blob], 'product.jpg', { type: blob.type || 'image/jpeg' });
+                        } catch (e) {
+                            formData.append('productImageUrl', prefillProductUrl);
+                        }
+                    }
+                    if (productFile) {
+                        formData.append('productImage', productFile);
+                    } else if (prefillProductUrl) {
+                        formData.append('productImageUrl', prefillProductUrl);
+                    }
                     formData.append('sampleCount', '1');
 
                     try {
@@ -1191,6 +1762,10 @@
             // ============================================================================
             const app = {
                 init() {
+                    navigation.init();
+                    priceTabs.init();
+                    landing.loadCategories();
+                    document.getElementById('extractProductBtn').addEventListener('click', () => ecommerce.extractAndTryOn());
                     fileHandler.setupFileInput(
                         elements.personUploadArea,
                         elements.personFileInput,
