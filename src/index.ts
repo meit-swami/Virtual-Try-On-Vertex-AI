@@ -1,14 +1,27 @@
 // Web server for Virtual Try-On interface
 import dotenv from 'dotenv';
 import express, { Request, Response } from 'express';
+import session from 'express-session';
 import multer from 'multer';
 import cors from 'cors';
+import bcrypt from 'bcrypt';
 import fs from 'fs';
 import path from 'path';
 import https from 'https';
 import http from 'http';
 import { GoogleAuth } from 'google-auth-library';
 import * as cheerio from 'cheerio';
+import {
+    getUserByUsername,
+    getUserById,
+    createUser,
+    countUsers,
+    insertTryOnHistory,
+    getTryOnHistoryByUser,
+    getTryOnByGenerationId,
+    deleteTryOnHistory,
+    type User,
+} from './db';
 
 // Load environment variables
 dotenv.config();
@@ -24,6 +37,14 @@ interface VirtualTryOnResult {
     personImageUrl: string;
     productImageUrl: string;
     resultImages: string[];
+}
+
+declare global {
+    namespace Express {
+        interface Request {
+            user?: User;
+        }
+    }
 }
 
 interface PredictionResponse {
@@ -314,8 +335,16 @@ function initializeApp(): void {
 // ============================================================================
 
 const app = express();
-app.use(cors());
+app.use(cors({ origin: true, credentials: true }));
 app.use(express.json());
+app.use(
+    session({
+        secret: process.env.SESSION_SECRET || 'zaha-ai-secret-change-in-production',
+        resave: false,
+        saveUninitialized: false,
+        cookie: { secure: process.env.NODE_ENV === 'production', httpOnly: true, maxAge: 7 * 24 * 60 * 60 * 1000 },
+    })
+);
 app.use(
     express.static('public', {
         setHeaders: (res) => {
@@ -327,6 +356,81 @@ app.use(
 );
 app.use('/uploads', express.static(PATHS.UPLOADS));
 app.use('/outputs', express.static(PATHS.OUTPUTS));
+
+// Load user from session
+app.use(async (req: Request, _res: Response, next: () => void) => {
+    const sid = (req.session as unknown as { userId?: number })?.userId;
+    if (sid) {
+        try {
+            req.user = await getUserById(sid) ?? undefined;
+        } catch {
+            req.user = undefined;
+        }
+    }
+    next();
+});
+
+function requireAuth(req: Request, res: Response, next: () => void): void {
+    if (!req.user) {
+        res.status(401).json({ error: 'Login required' });
+        return;
+    }
+    next();
+}
+
+// ----------------------------------------------------------------------------
+// Auth API
+// ----------------------------------------------------------------------------
+app.post('/api/auth/register', async (req: Request, res: Response) => {
+    try {
+        const { username, password } = req.body as { username?: string; password?: string };
+        if (!username || typeof username !== 'string' || !password || typeof password !== 'string') {
+            return res.status(400).json({ error: 'Username and password required' });
+        }
+        const u = username.trim().toLowerCase();
+        if (u.length < 2) return res.status(400).json({ error: 'Username too short' });
+        if (password.length < 6) return res.status(400).json({ error: 'Password must be at least 6 characters' });
+        const existing = await getUserByUsername(u);
+        if (existing) return res.status(400).json({ error: 'Username already taken' });
+        const hash = await bcrypt.hash(password, 10);
+        const userId = await createUser(u, hash, 'user');
+        const user = await getUserById(userId);
+        if (!user) return res.status(500).json({ error: 'Registration failed' });
+        (req.session as unknown as { userId: number }).userId = user.id;
+        res.json({ user: { id: user.id, username: user.username, role: user.role } });
+    } catch (e: unknown) {
+        console.error('Register error:', e);
+        res.status(500).json({ error: 'Registration failed' });
+    }
+});
+
+app.post('/api/auth/login', async (req: Request, res: Response) => {
+    try {
+        const { username, password } = req.body as { username?: string; password?: string };
+        if (!username || typeof username !== 'string' || !password || typeof password !== 'string') {
+            return res.status(400).json({ error: 'Username and password required' });
+        }
+        const user = await getUserByUsername(username.trim().toLowerCase());
+        if (!user || !(await bcrypt.compare(password, user.password_hash))) {
+            return res.status(401).json({ error: 'Invalid username or password' });
+        }
+        (req.session as unknown as { userId: number }).userId = user.id;
+        res.json({ user: { id: user.id, username: user.username, role: user.role } });
+    } catch (e: unknown) {
+        console.error('Login error:', e);
+        res.status(500).json({ error: 'Login failed' });
+    }
+});
+
+app.get('/api/auth/me', (req: Request, res: Response) => {
+    if (!req.user) return res.status(401).json({ error: 'Not logged in' });
+    res.json({ user: { id: req.user.id, username: req.user.username, role: req.user.role } });
+});
+
+app.post('/api/auth/logout', (req: Request, res: Response) => {
+    req.session.destroy(() => {});
+    res.json({ ok: true });
+});
 
 // Multer configuration
 const storage = multer.diskStorage({
@@ -386,6 +490,7 @@ async function downloadImageToFile(imageUrl: string, destPath: string): Promise<
 
 app.post(
     '/api/virtual-try-on',
+    requireAuth,
     upload.fields([
         { name: 'personImage', maxCount: 1 },
         { name: 'productImage', maxCount: 1 },
@@ -395,6 +500,7 @@ app.post(
             const files = (req.files || {}) as { [fieldname: string]: Express.Multer.File[] };
             const body = req.body as { productImageUrl?: string };
             const generationId = Date.now();
+            const userId = req.user!.id;
 
             if (!files.personImage?.[0]) {
                 return res.status(400).json({ error: 'Person image is required' });
@@ -447,6 +553,9 @@ app.post(
                 savedImages.push(`/outputs/${outputFilename}`);
             }
 
+            const resultFilenames = savedImages.map((u) => path.basename(u));
+            await insertTryOnHistory(userId, generationId, personNewFilename, productNewFilename, resultFilenames);
+
             res.json({
                 success: true,
                 id: generationId,
@@ -477,42 +586,97 @@ app.post('/api/extract-product', async (req: Request, res: Response) => {
             return res.status(400).json({ error: 'Invalid URL protocol' });
         }
 
+        const headers: Record<string, string> = {
+            'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36',
+            'Accept': 'text/html,application/xhtml+xml,application/xml;q=0.9,image/webp,*/*;q=0.8',
+            'Accept-Language': 'en-US,en;q=0.9',
+            'Accept-Encoding': 'identity',
+            'Referer': parsed.origin + '/',
+        };
+
         const html = await new Promise<string>((resolve, reject) => {
             const lib = parsed.protocol === 'https:' ? https : http;
-            const req2 = lib.get(url, { headers: { 'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36' } }, (r) => {
+            const req2 = lib.get(url, { headers }, (r) => {
                 let data = '';
                 r.on('data', (ch) => { data += ch; });
                 r.on('end', () => resolve(data));
             });
             req2.on('error', reject);
-            req2.setTimeout(10000, () => { req2.destroy(); reject(new Error('Request timeout')); });
+            req2.setTimeout(15000, () => { req2.destroy(); reject(new Error('Request timeout')); });
         });
+
+        if (html.includes('Site Maintenance') || html.includes('Something went wrong') || html.length < 1000) {
+            return res.status(403).json({
+                error: 'This site blocked the request or returned an error page. Try copying the product image URL directly or use a different site.',
+            });
+        }
 
         const $ = cheerio.load(html);
         let productImageUrl: string | null = null;
 
-        // Try og:image first (common for product pages)
+        const normalizeUrl = (src: string): string =>
+            src.startsWith('//') ? 'https:' + src : src.startsWith('/') ? parsed.origin + src : src;
+
+        // 1. Try og:image first (common for product pages)
         const ogImage = $('meta[property="og:image"]').attr('content');
-        if (ogImage) {
-            productImageUrl = ogImage.startsWith('//') ? 'https:' + ogImage : ogImage;
+        if (ogImage && ogImage.length > 10) {
+            productImageUrl = normalizeUrl(ogImage);
         }
 
-        // Fallback: find largest product-like image (common selectors)
+        // 2. Try JSON-LD product data (Myntra, Flipkart, etc. embed this)
+        if (!productImageUrl) {
+            $('script[type="application/ld+json"]').each((_, el) => {
+                try {
+                    const json = JSON.parse($(el).html() || '{}');
+                    const item = json['@graph']?.[0] || json;
+                    const img = item.image || item.thumbnailUrl;
+                    if (typeof img === 'string' && img.length > 10) {
+                        productImageUrl = normalizeUrl(img);
+                        return false;
+                    }
+                    if (Array.isArray(img) && img[0]) {
+                        productImageUrl = normalizeUrl(img[0]);
+                        return false;
+                    }
+                } catch {
+                    /* ignore */
+                }
+            });
+        }
+
+        // 3. Myntra-specific: imageContainer, pdp-image
+        if (!productImageUrl && parsed.hostname.includes('myntra')) {
+            const myntraSelectors = [
+                'img[class*="image-container"]', 'img[class*="pdp-image"]', '.image-grid-image img',
+                '[class*="ProductImage"] img', 'img[data-src]',
+            ];
+            for (const sel of myntraSelectors) {
+                $(sel).each((_, el) => {
+                    const src = $(el).attr('src') || $(el).attr('data-src');
+                    if (src && (src.includes('myntra') || src.includes('cdn')) && !src.includes('logo')) {
+                        productImageUrl = normalizeUrl(src);
+                        return false;
+                    }
+                });
+                if (productImageUrl) break;
+            }
+        }
+
+        // 4. Fallback: find product-like images (src or data-src for lazy load)
         if (!productImageUrl) {
             const selectors = [
                 'img[data-product-image]', 'img.product-image', '.product img', '.product-image img',
-                '[class*="product"] img', '[id*="product"] img', 'main img', '.gallery img'
+                '[class*="product"] img', '[class*="Product"] img', 'main img', '.gallery img', '.pdp-images img',
             ];
             const candidates: { src: string; size: number }[] = [];
             for (const sel of selectors) {
                 $(sel).each((_, el) => {
-                    const src = $(el).attr('src');
-                    if (src && !src.includes('logo') && !src.includes('avatar')) {
-                        const w = parseInt(String($(el).attr('width') || '0'), 10) || 200;
-                        const h = parseInt(String($(el).attr('height') || '0'), 10) || 200;
+                    const src = $(el).attr('src') || $(el).attr('data-src');
+                    if (src && !src.includes('logo') && !src.includes('avatar') && src.match(/\.(jpg|jpeg|png|webp)/i)) {
+                        const w = parseInt(String($(el).attr('width') || '0'), 10) || 300;
+                        const h = parseInt(String($(el).attr('height') || '0'), 10) || 300;
                         const size = w * h;
-                        const fullSrc = src.startsWith('//') ? 'https:' + src : src.startsWith('/') ? parsed.origin + src : src;
-                        candidates.push({ src: fullSrc, size });
+                        candidates.push({ src: normalizeUrl(src), size });
                     }
                 });
             }
@@ -531,9 +695,35 @@ app.post('/api/extract-product', async (req: Request, res: Response) => {
     }
 });
 
-app.get('/api/results', (_req: Request, res: Response) => {
+app.get('/api/results', requireAuth, async (req: Request, res: Response) => {
     try {
-        const results = ResultService.getAllResults();
+        const userId = req.user!.id;
+        const isSuperadmin = req.user!.role === 'superadmin';
+        const rows = await getTryOnHistoryByUser(userId, isSuperadmin);
+        const uploadsDir = PATHS.UPLOADS;
+        const outputsDir = PATHS.OUTPUTS;
+        const results: VirtualTryOnResult[] = rows
+            .map((row) => {
+                const personPath = path.join(uploadsDir, row.person_filename);
+                const productPath = path.join(uploadsDir, row.product_filename);
+                let resultPaths: string[] = [];
+                try {
+                    resultPaths = JSON.parse(row.result_filenames) as string[];
+                } catch {
+                    resultPaths = [];
+                }
+                const firstResultPath = resultPaths[0] ? path.join(outputsDir, resultPaths[0]) : '';
+                if (!fs.existsSync(personPath) || !fs.existsSync(productPath) || !fs.existsSync(firstResultPath)) {
+                    return null;
+                }
+                return {
+                    id: row.generation_id,
+                    personImageUrl: `/uploads/${row.person_filename}`,
+                    productImageUrl: `/uploads/${row.product_filename}`,
+                    resultImages: resultPaths.map((f) => `/outputs/${f}`),
+                };
+            })
+            .filter((r): r is VirtualTryOnResult => r !== null);
         res.json({ results });
     } catch (error: any) {
         console.error('Error getting results:', error);
@@ -544,14 +734,71 @@ app.get('/api/results', (_req: Request, res: Response) => {
     }
 });
 
+app.delete('/api/results/:id', requireAuth, async (req: Request, res: Response) => {
+    try {
+        const generationId = parseInt(req.params.id, 10);
+        if (Number.isNaN(generationId)) return res.status(400).json({ error: 'Invalid id' });
+        const row = await getTryOnByGenerationId(generationId);
+        if (!row) return res.status(404).json({ error: 'Result not found' });
+        const isSuperadmin = req.user!.role === 'superadmin';
+        if (row.user_id !== req.user!.id && !isSuperadmin) {
+            return res.status(403).json({ error: 'You can only delete your own results' });
+        }
+        const uploadsDir = PATHS.UPLOADS;
+        const outputsDir = PATHS.OUTPUTS;
+        for (const filename of [row.person_filename, row.product_filename]) {
+            const p = path.join(uploadsDir, filename);
+            if (fs.existsSync(p)) fs.unlinkSync(p);
+        }
+        let resultFilenames: string[] = [];
+        try {
+            resultFilenames = JSON.parse(row.result_filenames) as string[];
+        } catch {
+            /* ignore */
+        }
+        for (const filename of resultFilenames) {
+            const p = path.join(outputsDir, filename);
+            if (fs.existsSync(p)) fs.unlinkSync(p);
+        }
+        await deleteTryOnHistory(generationId);
+        res.json({ ok: true });
+    } catch (error: any) {
+        console.error('Error deleting result:', error);
+        res.status(500).json({ error: error.message || 'Failed to delete' });
+    }
+});
+
 // ============================================================================
 // Server Startup
 // ============================================================================
 
 initializeApp();
 
-app.listen(CONFIG.PORT, () => {
+async function seedSuperadminIfNeeded(): Promise<void> {
+    try {
+        const cnt = await countUsers();
+        if (cnt > 0) return;
+        const defaultPassword = 'admin123';
+        const hash = await bcrypt.hash(defaultPassword, 10);
+        await createUser('superadmin', hash, 'superadmin');
+        console.log('👤 Superadmin created: username=superadmin, password=admin123 (change after first login)');
+    } catch (e: unknown) {
+        const err = e as { code?: string; message?: string };
+        if (err?.code === 'ECONNREFUSED') {
+            console.warn(
+                '⚠️  MySQL connection refused. Login and history will not work until the database is reachable.\n' +
+                '   If you run the app locally, the host auth-db1274.hstgr.io may only allow connections from your hosting provider.\n' +
+                '   Deploy the app on the same host (e.g. Hostinger) or use a MySQL instance reachable from your network (e.g. localhost).'
+            );
+        } else {
+            console.error('Could not seed superadmin:', err?.message ?? e);
+        }
+    }
+}
+
+app.listen(CONFIG.PORT, async () => {
     console.log(`🚀 Server running on http://localhost:${CONFIG.PORT}`);
     console.log(`📁 Uploads directory: ${PATHS.UPLOADS}`);
     console.log(`📁 Outputs directory: ${PATHS.OUTPUTS}`);
+    await seedSuperadminIfNeeded();
 });

@@ -1005,6 +1005,25 @@
                 color: var(--text-secondary);
                 font-size: 1.1em;
             }
+
+            /* ========== Login / Register ========== */
+            .auth-page { max-width: 420px; margin: 0 auto; padding: 40px 24px; }
+            .auth-page h2 { text-align: center; margin-bottom: 24px; color: var(--text-primary); }
+            .auth-tabs { display: flex; gap: 0; margin-bottom: 24px; background: var(--border-light); padding: 4px; border-radius: 12px; }
+            .auth-tabs button { flex: 1; padding: 12px; border: none; background: transparent; border-radius: 10px; font-weight: 600; color: var(--text-secondary); cursor: pointer; transition: all 0.2s; }
+            .auth-tabs button.active { background: var(--bg-card); color: var(--accent); box-shadow: 0 2px 8px rgba(0,0,0,0.06); }
+            .auth-form label { display: block; margin-bottom: 6px; font-weight: 500; color: var(--text-primary); }
+            .auth-form input { width: 100%; padding: 12px 16px; border: 1px solid var(--border-light); border-radius: 8px; margin-bottom: 16px; font-size: 1em; }
+            .auth-form .btn { margin-top: 8px; }
+            .auth-error { color: #dc2626; font-size: 0.9em; margin-bottom: 12px; }
+            .auth-user { color: var(--text-secondary); font-size: 0.95em; margin-right: 12px; }
+            .auth-user strong { color: var(--accent); }
+            .btn-logout { background: transparent; color: var(--text-secondary); border: 1px solid var(--border-light); padding: 8px 16px; border-radius: 8px; cursor: pointer; font-size: 0.9em; }
+            .btn-logout:hover { background: var(--bg-subtle); color: var(--text-primary); }
+            .login-required { background: rgba(56,193,183,0.1); border: 1px solid var(--accent); border-radius: 12px; padding: 20px; text-align: center; margin-bottom: 24px; color: var(--text-primary); }
+            .login-required a { color: var(--accent); font-weight: 600; }
+            .btn-delete { background: #ef4444; color: white; border: none; padding: 8px 16px; border-radius: 8px; cursor: pointer; font-size: 0.9em; margin-top: 12px; width: 100%; max-width: 140px; }
+            .btn-delete:hover { background: #dc2626; }
         </style>
     </head>
     <body>
@@ -1014,6 +1033,10 @@
                 <a href="#" class="nav-link active" data-page="landing">Home</a>
                 <a href="#" class="nav-link" data-page="try-on">Try On</a>
                 <a href="#" class="nav-link" data-page="subscription">Subscription</a>
+                <span id="authNavWrap">
+                    <a href="#" class="nav-link" data-page="login" id="navLogin">Login</a>
+                    <span id="authUserSpan" class="hidden"><span class="auth-user" id="authUserName"></span><button type="button" class="btn-logout" id="btnLogout">Logout</button></span>
+                </span>
             </div>
         </nav>
 
@@ -1044,6 +1067,25 @@
             </footer>
         </section>
 
+        <!-- Login Page -->
+        <section id="page-login" class="page-section">
+            <div class="auth-page">
+                <h2>Welcome to ZAHA AI</h2>
+                <div class="auth-tabs">
+                    <button type="button" class="auth-tab active" data-tab="login">Login</button>
+                    <button type="button" class="auth-tab" data-tab="register">Register</button>
+                </div>
+                <div id="authError" class="auth-error hidden"></div>
+                <form id="authForm" class="auth-form">
+                    <label for="authUsername">Username</label>
+                    <input type="text" id="authUsername" name="username" required autocomplete="username" />
+                    <label for="authPassword">Password</label>
+                    <input type="password" id="authPassword" name="password" required autocomplete="current-password" />
+                    <button type="submit" class="btn" id="authSubmit">Login</button>
+                </form>
+            </div>
+        </section>
+
         <!-- Try-On Page -->
         <section id="page-try-on" class="page-section">
         <div class="container">
@@ -1053,6 +1095,9 @@
             </div>
 
             <div class="content">
+                <div id="loginRequiredBanner" class="login-required hidden">
+                    Please <a href="#" data-page="login" class="nav-link">log in</a> to use Virtual Try-On and see your history.
+                </div>
                 <div class="input-section">
                     <div class="upload-section">
                         <h2>👤 Person Image</h2>
@@ -1184,11 +1229,54 @@
                 VIRTUAL_TRY_ON: '/api/virtual-try-on',
                 RESULTS: '/api/results',
                 EXTRACT_PRODUCT: '/api/extract-product',
+                AUTH_ME: '/api/auth/me',
+                AUTH_LOGIN: '/api/auth/login',
+                AUTH_REGISTER: '/api/auth/register',
+                AUTH_LOGOUT: '/api/auth/logout',
             };
+            const fetchOpts = { credentials: 'include' };
 
             const SAMPLES_DATA = {"categories":[{"id":"sarees","name":"Sarees","subtitle":"Womens Wear","icon":"👗","samples":["https://images.unsplash.com/photo-1603252109303-2751441dd157?w=400","https://images.unsplash.com/photo-1594633312681-425c7b97ccd1?w=400","https://images.unsplash.com/photo-1595776613215-fe04b78de7d0?w=400","https://images.unsplash.com/photo-1567411622774-74ec98e1d7b2?w=400","https://images.unsplash.com/photo-1572804013309-59a88b7e92f1?w=400"]},{"id":"lehengas-ethnics","name":"Lehengas, Kurti & Ethnics","subtitle":"Womens & Girls Wear","icon":"✨","samples":["https://images.unsplash.com/photo-1595776613215-fe04b78de7d0?w=400","https://images.unsplash.com/photo-1594938298603-c8148c4dae35?w=400","https://images.unsplash.com/photo-1558171813-4c088753af8f?w=400","https://images.unsplash.com/photo-1551488831-00ddcb6c6bd3?w=400","https://images.unsplash.com/photo-1515886657613-9f3515b0c78f?w=400"]},{"id":"jewellery","name":"Jewellery","subtitle":"Womens Wear","icon":"💎","samples":["https://images.unsplash.com/photo-1515562141207-7a88fb7ce338?w=400","https://images.unsplash.com/photo-1599643478518-a784e5dc4c8f?w=400","https://images.unsplash.com/photo-1605100804763-247f67b3557e?w=400","https://images.unsplash.com/photo-1611652022419-a9419f74343a?w=400","https://images.unsplash.com/photo-1611085583191-a3b181a88401?w=400"]},{"id":"mens-wear","name":"Shorts, Shirts, T-shirts & Formals","subtitle":"Mens Wear","icon":"👔","samples":["https://images.unsplash.com/photo-1558171813-4c088753af8f?w=400","https://images.unsplash.com/photo-1598033129183-c4f50c736f10?w=400","https://images.unsplash.com/photo-1596755094514-f87e34085b2c?w=400","https://images.unsplash.com/photo-1617137968427-85924c800a22?w=400","https://images.unsplash.com/photo-1620012253295-c15cc3e65df4?w=400"]},{"id":"eyewear","name":"Eyewear","subtitle":"Unisex","icon":"🕶️","samples":["https://images.unsplash.com/photo-1572635196237-14b3f281503f?w=400","https://images.unsplash.com/photo-1511499767150-a48a237f0083?w=400","https://images.unsplash.com/photo-1574258495973-f010dfbb5371?w=400","https://images.unsplash.com/photo-1473496169904-658ba7c44d8a?w=400","https://images.unsplash.com/photo-1577803645773-f96470509666?w=400"]},{"id":"accessories","name":"Accessories","subtitle":"Belts, Ties, Hats, Brooch","icon":"🎩","samples":["https://images.unsplash.com/photo-1624222247344-550fb60583dc?w=400","https://images.unsplash.com/photo-1582555172866-f73bb12a2ab3?w=400","https://images.unsplash.com/photo-1521369909029-2afed882baee?w=400","https://images.unsplash.com/photo-1588850561407-ed78c282e89b?w=400","https://images.unsplash.com/photo-1591047139829-d91aecb6caea?w=400"]},{"id":"watches","name":"Watches","subtitle":"Luxury & Casual","icon":"⌚","samples":["https://images.unsplash.com/photo-1524592094714-0f0654e20314?w=400","https://images.unsplash.com/photo-1523275335684-37898b6baf30?w=400","https://images.unsplash.com/photo-1542496658-e33a6d0d50f6?w=400","https://images.unsplash.com/photo-1587836374828-4dbafa94cf0e?w=400","https://images.unsplash.com/photo-1612817159949-195b6eb9e31a?w=400"]},{"id":"makeup","name":"Makeup Shades","subtitle":"Lipstick, Blush & More","icon":"💄","samples":["https://images.unsplash.com/photo-1596462502278-27bfdc403348?w=400","https://images.unsplash.com/photo-1611080626919-7cf5a9dbab5b?w=400","https://images.unsplash.com/photo-1522335789203-aabd1fc54bc9?w=400","https://images.unsplash.com/photo-1596476135970-2e0152096822?w=400","https://images.unsplash.com/photo-1549465220-1a8b9238cd48?w=400"]}]};
 
             let prefillProductUrl = null;
+            let authUser = null;
+
+            // ============================================================================
+            // Auth
+            // ============================================================================
+            const auth = {
+                async check() {
+                    try {
+                        const res = await fetch(API.AUTH_ME, fetchOpts);
+                        if (res.ok) {
+                            const data = await res.json();
+                            authUser = data.user;
+                            return true;
+                        }
+                    } catch (e) { console.error('Auth check failed', e); }
+                    authUser = null;
+                    return false;
+                },
+                updateNav() {
+                    const loginLink = document.getElementById('navLogin');
+                    const userSpan = document.getElementById('authUserSpan');
+                    const userNameEl = document.getElementById('authUserName');
+                    const loginBanner = document.getElementById('loginRequiredBanner');
+                    if (authUser) {
+                        if (loginLink) loginLink.classList.add('hidden');
+                        if (userSpan) { userSpan.classList.remove('hidden'); userNameEl.textContent = authUser.username + (authUser.role === 'superadmin' ? ' (admin)' : ''); }
+                        if (loginBanner) loginBanner.classList.add('hidden');
+                    } else {
+                        if (loginLink) loginLink.classList.remove('hidden');
+                        if (userSpan) userSpan.classList.add('hidden');
+                        if (loginBanner) loginBanner.classList.remove('hidden');
+                    }
+                },
+                async init() {
+                    await auth.check();
+                    auth.updateNav();
+                },
+            };
 
             // ============================================================================
             // Page Navigation
@@ -1207,10 +1295,62 @@
                     document.querySelectorAll('.nav-link').forEach(link => {
                         link.addEventListener('click', (e) => {
                             e.preventDefault();
-                            navigation.show(link.getAttribute('data-page'));
+                            const page = link.getAttribute('data-page');
+                            if (page) navigation.show(page);
                         });
                     });
                     document.getElementById('heroTryBtn').addEventListener('click', () => navigation.show('try-on'));
+                },
+            };
+
+            // Login page: tab switch and form submit
+            const authPage = {
+                currentTab: 'login',
+                init() {
+                    document.querySelectorAll('.auth-tab').forEach(btn => {
+                        btn.addEventListener('click', () => {
+                            authPage.currentTab = btn.dataset.tab;
+                            document.querySelectorAll('.auth-tab').forEach(b => b.classList.remove('active'));
+                            btn.classList.add('active');
+                            document.getElementById('authSubmit').textContent = authPage.currentTab === 'login' ? 'Login' : 'Register';
+                            document.getElementById('authPassword').setAttribute('autocomplete', authPage.currentTab === 'login' ? 'current-password' : 'new-password');
+                            document.getElementById('authError').classList.add('hidden');
+                        });
+                    });
+                    document.getElementById('authForm').addEventListener('submit', async (e) => {
+                        e.preventDefault();
+                        const username = document.getElementById('authUsername').value.trim();
+                        const password = document.getElementById('authPassword').value;
+                        const errEl = document.getElementById('authError');
+                        const url = authPage.currentTab === 'login' ? API.AUTH_LOGIN : API.AUTH_REGISTER;
+                        errEl.classList.add('hidden');
+                        try {
+                            const res = await fetch(url, {
+                                method: 'POST',
+                                headers: { 'Content-Type': 'application/json' },
+                                credentials: 'include',
+                                body: JSON.stringify({ username, password }),
+                            });
+                            const data = await res.json().catch(() => ({}));
+                            if (!res.ok) {
+                                errEl.textContent = data.error || (res.status === 401 ? 'Invalid username or password' : 'Failed');
+                                errEl.classList.remove('hidden');
+                                return;
+                            }
+                            authUser = data.user;
+                            auth.updateNav();
+                            navigation.show('try-on');
+                        } catch (e) {
+                            errEl.textContent = 'Network error';
+                            errEl.classList.remove('hidden');
+                        }
+                    });
+                    document.getElementById('btnLogout').addEventListener('click', async () => {
+                        await fetch(API.AUTH_LOGOUT, { method: 'POST', ...fetchOpts });
+                        authUser = null;
+                        auth.updateNav();
+                        navigation.show('landing');
+                    });
                 },
             };
 
@@ -1318,9 +1458,16 @@
                         const res = await fetch(API.EXTRACT_PRODUCT, {
                             method: 'POST',
                             headers: { 'Content-Type': 'application/json' },
+                            credentials: 'include',
                             body: JSON.stringify({ url }),
                         });
-                        const data = await res.json();
+                        const text = await res.text();
+                        let data;
+                        try {
+                            data = text ? JSON.parse(text) : {};
+                        } catch {
+                            throw new Error('This site blocked the request or returned an error page. Try copying the product image URL directly, or use Direct Try-On and upload the image.');
+                        }
                         if (!res.ok) throw new Error(data.error || 'Extraction failed');
                         prefillProductUrl = data.productImageUrl;
                         statusEl.classList.add('hidden');
@@ -1576,10 +1723,16 @@
                         const response = await fetch(API.VIRTUAL_TRY_ON, {
                             method: 'POST',
                             body: formData,
+                            credentials: 'include',
                         });
 
                         const data = await response.json();
 
+                        if (response.status === 401) {
+                            authUser = null;
+                            auth.updateNav();
+                            throw new Error('Please log in to use Virtual Try-On.');
+                        }
                         if (!response.ok) {
                             throw new Error(data.error || 'Failed to generate virtual try-on');
                         }
@@ -1600,21 +1753,30 @@
                 },
 
                 async loadAllResults() {
+                    if (!authUser) {
+                        elements.resultsDiv.classList.add('hidden');
+                        return;
+                    }
                     try {
-                        const response = await fetch(API.RESULTS);
-                        if (!response.ok) {
-                            throw new Error('Failed to load results');
+                        const response = await fetch(API.RESULTS, fetchOpts);
+                        if (response.status === 401) {
+                            authUser = null;
+                            auth.updateNav();
+                            elements.resultsDiv.classList.add('hidden');
+                            return;
                         }
+                        if (!response.ok) throw new Error('Failed to load results');
                         const data = await response.json();
-
                         if (data.results && data.results.length > 0) {
                             results.displayAllResults(data.results);
                             elements.resultsDiv.classList.remove('hidden');
+                            results.attachDeleteHandlers();
                         } else {
                             elements.resultsDiv.classList.add('hidden');
                         }
                     } catch (error) {
                         console.error('Error loading results:', error);
+                        elements.resultsDiv.classList.add('hidden');
                     }
                 },
             };
@@ -1635,7 +1797,7 @@
                     elements.resultImagesDiv.innerHTML = resultsArray
                         .map(
                             (result) => `
-                        <div class="result-card">
+                        <div class="result-card" data-result-id="${result.id}">
                             <div class="result-grid">
                                 <div class="result-grid-item">
                                     <h4>👤 Person</h4>
@@ -1656,13 +1818,33 @@
                                     </div>
                                 </div>
                             </div>
+                            <button type="button" class="btn-delete" data-delete-id="${result.id}" title="Remove from history permanently">Delete</button>
                         </div>
                     `
                         )
                         .join('');
 
-                    // Add click handlers to all images (person, product, result)
                     results.attachImageClickHandlers();
+                },
+
+                attachDeleteHandlers() {
+                    elements.resultImagesDiv.querySelectorAll('.btn-delete[data-delete-id]').forEach(btn => {
+                        btn.addEventListener('click', async () => {
+                            const id = btn.getAttribute('data-delete-id');
+                            if (!id || !confirm('Remove this try-on from history permanently?')) return;
+                            try {
+                                const res = await fetch(`${API.RESULTS}/${id}`, { method: 'DELETE', ...fetchOpts });
+                                if (!res.ok) {
+                                    const d = await res.json().catch(() => ({}));
+                                    alert(d.error || 'Failed to delete');
+                                    return;
+                                }
+                                api.loadAllResults();
+                            } catch (e) {
+                                alert('Failed to delete');
+                            }
+                        });
+                    });
                 },
 
                 attachImageClickHandlers() {
@@ -1758,9 +1940,11 @@
             // Application Initialization
             // ============================================================================
             const app = {
-                init() {
+                async init() {
                     navigation.init();
                     priceTabs.init();
+                    authPage.init();
+                    await auth.init();
                     landing.loadCategories();
                     document.getElementById('extractProductBtn').addEventListener('click', () => ecommerce.extractAndTryOn());
                     fileHandler.setupFileInput(
