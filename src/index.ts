@@ -378,6 +378,14 @@ function requireAuth(req: Request, res: Response, next: () => void): void {
     next();
 }
 
+function isDbConnectionError(e: unknown): boolean {
+    const err = e as { code?: string; errno?: string };
+    return err?.code === 'ECONNREFUSED' || err?.code === 'ETIMEDOUT' || err?.errno === 'ECONNREFUSED';
+}
+
+const DB_UNAVAILABLE_MSG =
+    'Database is unavailable. If you run the app locally, the database may only be reachable from your hosting provider. Try again after deploying or use a local MySQL.';
+
 // ----------------------------------------------------------------------------
 // Auth API
 // ----------------------------------------------------------------------------
@@ -400,6 +408,9 @@ app.post('/api/auth/register', async (req: Request, res: Response) => {
         res.json({ user: { id: user.id, username: user.username, role: user.role } });
     } catch (e: unknown) {
         console.error('Register error:', e);
+        if (isDbConnectionError(e)) {
+            return res.status(503).json({ error: DB_UNAVAILABLE_MSG });
+        }
         res.status(500).json({ error: 'Registration failed' });
     }
 });
@@ -418,6 +429,9 @@ app.post('/api/auth/login', async (req: Request, res: Response) => {
         res.json({ user: { id: user.id, username: user.username, role: user.role } });
     } catch (e: unknown) {
         console.error('Login error:', e);
+        if (isDbConnectionError(e)) {
+            return res.status(503).json({ error: DB_UNAVAILABLE_MSG });
+        }
         res.status(500).json({ error: 'Login failed' });
     }
 });
