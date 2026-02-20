@@ -12,7 +12,7 @@ import http from 'http';
 import { GoogleAuth } from 'google-auth-library';
 import * as cheerio from 'cheerio';
 import {
-    getUserByUsername,
+    getUserByEmail,
     getUserById,
     createUser,
     countUsers,
@@ -389,23 +389,25 @@ const DB_UNAVAILABLE_MSG =
 // ----------------------------------------------------------------------------
 // Auth API
 // ----------------------------------------------------------------------------
+const EMAIL_REGEX = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
+
 app.post('/api/auth/register', async (req: Request, res: Response) => {
     try {
-        const { username, password } = req.body as { username?: string; password?: string };
-        if (!username || typeof username !== 'string' || !password || typeof password !== 'string') {
-            return res.status(400).json({ error: 'Username and password required' });
+        const { email, password } = req.body as { email?: string; password?: string };
+        if (!email || typeof email !== 'string' || !password || typeof password !== 'string') {
+            return res.status(400).json({ error: 'Email and password required' });
         }
-        const u = username.trim().toLowerCase();
-        if (u.length < 2) return res.status(400).json({ error: 'Username too short' });
+        const e = email.trim().toLowerCase();
+        if (!EMAIL_REGEX.test(e)) return res.status(400).json({ error: 'Please enter a valid email address' });
         if (password.length < 6) return res.status(400).json({ error: 'Password must be at least 6 characters' });
-        const existing = await getUserByUsername(u);
-        if (existing) return res.status(400).json({ error: 'Username already taken' });
+        const existing = await getUserByEmail(e);
+        if (existing) return res.status(400).json({ error: 'An account with this email already exists' });
         const hash = await bcrypt.hash(password, 10);
-        const userId = await createUser(u, hash, 'user');
+        const userId = await createUser(e, hash, 'user');
         const user = await getUserById(userId);
         if (!user) return res.status(500).json({ error: 'Registration failed' });
         (req.session as unknown as { userId: number }).userId = user.id;
-        res.json({ user: { id: user.id, username: user.username, role: user.role } });
+        res.json({ user: { id: user.id, email: user.email, role: user.role } });
     } catch (e: unknown) {
         console.error('Register error:', e);
         if (isDbConnectionError(e)) {
@@ -417,16 +419,16 @@ app.post('/api/auth/register', async (req: Request, res: Response) => {
 
 app.post('/api/auth/login', async (req: Request, res: Response) => {
     try {
-        const { username, password } = req.body as { username?: string; password?: string };
-        if (!username || typeof username !== 'string' || !password || typeof password !== 'string') {
-            return res.status(400).json({ error: 'Username and password required' });
+        const { email, password } = req.body as { email?: string; password?: string };
+        if (!email || typeof email !== 'string' || !password || typeof password !== 'string') {
+            return res.status(400).json({ error: 'Email and password required' });
         }
-        const user = await getUserByUsername(username.trim().toLowerCase());
+        const user = await getUserByEmail(email);
         if (!user || !(await bcrypt.compare(password, user.password_hash))) {
-            return res.status(401).json({ error: 'Invalid username or password' });
+            return res.status(401).json({ error: 'Invalid email or password' });
         }
         (req.session as unknown as { userId: number }).userId = user.id;
-        res.json({ user: { id: user.id, username: user.username, role: user.role } });
+        res.json({ user: { id: user.id, email: user.email, role: user.role } });
     } catch (e: unknown) {
         console.error('Login error:', e);
         if (isDbConnectionError(e)) {
@@ -438,7 +440,7 @@ app.post('/api/auth/login', async (req: Request, res: Response) => {
 
 app.get('/api/auth/me', (req: Request, res: Response) => {
     if (!req.user) return res.status(401).json({ error: 'Not logged in' });
-    res.json({ user: { id: req.user.id, username: req.user.username, role: req.user.role } });
+    res.json({ user: { id: req.user.id, email: req.user.email, role: req.user.role } });
 });
 
 app.post('/api/auth/logout', (req: Request, res: Response) => {
@@ -794,8 +796,8 @@ async function seedSuperadminIfNeeded(): Promise<void> {
         if (cnt > 0) return;
         const defaultPassword = 'admin123';
         const hash = await bcrypt.hash(defaultPassword, 10);
-        await createUser('superadmin', hash, 'superadmin');
-        console.log('👤 Superadmin created: username=superadmin, password=admin123 (change after first login)');
+        await createUser('superadmin@zaha.ai', hash, 'superadmin');
+        console.log('👤 Superadmin created: email=superadmin@zaha.ai, password=admin123 (change after first login)');
     } catch (e: unknown) {
         const err = e as { code?: string; message?: string };
         if (err?.code === 'ECONNREFUSED') {

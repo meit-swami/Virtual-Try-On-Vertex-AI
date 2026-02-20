@@ -11,16 +11,16 @@
 -- ============================================================================
 
 -- ----------------------------------------------------------------------------
--- Users: login and role (user = normal, superadmin = see all + delete any)
+-- Users: email login and role (user = normal, superadmin = see all + delete any)
 -- ----------------------------------------------------------------------------
 CREATE TABLE IF NOT EXISTS `users` (
   `id` INT UNSIGNED NOT NULL AUTO_INCREMENT,
-  `username` VARCHAR(64) NOT NULL,
+  `email` VARCHAR(255) NOT NULL,
   `password_hash` VARCHAR(255) NOT NULL,
   `role` ENUM('user', 'superadmin') NOT NULL DEFAULT 'user',
   `created_at` TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP,
   PRIMARY KEY (`id`),
-  UNIQUE KEY `uk_username` (`username`)
+  UNIQUE KEY `uk_email` (`email`)
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
 
 -- ----------------------------------------------------------------------------
@@ -43,7 +43,7 @@ CREATE TABLE IF NOT EXISTS `try_on_history` (
 -- ----------------------------------------------------------------------------
 -- Optional: Insert a superadmin (password set by app on first run if none)
 -- To set password manually, run in Node: require('bcrypt').hashSync('YourPassword', 10)
--- Then: UPDATE users SET password_hash = '<hash>' WHERE username = 'superadmin';
+-- Then: UPDATE users SET password_hash = '<hash>' WHERE email = 'superadmin@zaha.ai';
 -- ----------------------------------------------------------------------------
--- INSERT INTO `users` (`username`, `password_hash`, `role`) VALUES
--- ('superadmin', '$2b$10$YourBcryptHashHere', 'superadmin');
+-- INSERT INTO `users` (`email`, `password_hash`, `role`) VALUES
+-- ('superadmin@zaha.ai', '$2b$10$YourBcryptHashHere', 'superadmin');

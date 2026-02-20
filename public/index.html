@@ -1035,7 +1035,7 @@
                 <a href="#" class="nav-link" data-page="subscription">Subscription</a>
                 <span id="authNavWrap">
                     <a href="#" class="nav-link" data-page="login" id="navLogin">Login</a>
-                    <span id="authUserSpan" class="hidden"><span class="auth-user" id="authUserName"></span><button type="button" class="btn-logout" id="btnLogout">Logout</button></span>
+                    <span id="authUserSpan" class="hidden"><span class="auth-user" id="authUserDisplay"></span><button type="button" class="btn-logout" id="btnLogout">Logout</button></span>
                 </span>
             </div>
         </nav>
@@ -1077,10 +1077,10 @@
                 </div>
                 <div id="authError" class="auth-error hidden"></div>
                 <form id="authForm" class="auth-form">
-                    <label for="authUsername">Username</label>
-                    <input type="text" id="authUsername" name="username" required autocomplete="username" />
+                    <label for="authEmail">Email</label>
+                    <input type="email" id="authEmail" name="email" required autocomplete="email" placeholder="you@example.com" />
                     <label for="authPassword">Password</label>
-                    <input type="password" id="authPassword" name="password" required autocomplete="current-password" />
+                    <input type="password" id="authPassword" name="password" required autocomplete="current-password" placeholder="Min 6 characters" />
                     <button type="submit" class="btn" id="authSubmit">Login</button>
                 </form>
             </div>
@@ -1260,11 +1260,11 @@
                 updateNav() {
                     const loginLink = document.getElementById('navLogin');
                     const userSpan = document.getElementById('authUserSpan');
-                    const userNameEl = document.getElementById('authUserName');
+                    const userDisplayEl = document.getElementById('authUserDisplay');
                     const loginBanner = document.getElementById('loginRequiredBanner');
                     if (authUser) {
                         if (loginLink) loginLink.classList.add('hidden');
-                        if (userSpan) { userSpan.classList.remove('hidden'); userNameEl.textContent = authUser.username + (authUser.role === 'superadmin' ? ' (admin)' : ''); }
+                        if (userSpan && userDisplayEl) { userSpan.classList.remove('hidden'); userDisplayEl.textContent = (authUser.email || authUser.username || '') + (authUser.role === 'superadmin' ? ' (admin)' : ''); }
                         if (loginBanner) loginBanner.classList.add('hidden');
                     } else {
                         if (loginLink) loginLink.classList.remove('hidden');
@@ -1319,21 +1319,32 @@
                     });
                     document.getElementById('authForm').addEventListener('submit', async (e) => {
                         e.preventDefault();
-                        const username = document.getElementById('authUsername').value.trim();
+                        const emailEl = document.getElementById('authEmail');
+                        const email = emailEl ? emailEl.value.trim() : '';
                         const password = document.getElementById('authPassword').value;
                         const errEl = document.getElementById('authError');
                         const url = authPage.currentTab === 'login' ? API.AUTH_LOGIN : API.AUTH_REGISTER;
                         errEl.classList.add('hidden');
+                        if (!email || !/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email)) {
+                            errEl.textContent = 'Please enter a valid email address';
+                            errEl.classList.remove('hidden');
+                            return;
+                        }
+                        if (authPage.currentTab === 'register' && password.length < 6) {
+                            errEl.textContent = 'Password must be at least 6 characters';
+                            errEl.classList.remove('hidden');
+                            return;
+                        }
                         try {
                             const res = await fetch(url, {
                                 method: 'POST',
                                 headers: { 'Content-Type': 'application/json' },
                                 credentials: 'include',
-                                body: JSON.stringify({ username, password }),
+                                body: JSON.stringify({ email, password }),
                             });
                             const data = await res.json().catch(() => ({}));
                             if (!res.ok) {
-                                errEl.textContent = data.error || (res.status === 401 ? 'Invalid username or password' : 'Failed');
+                                errEl.textContent = data.error || (res.status === 401 ? 'Invalid email or password' : res.status === 503 ? 'Database unavailable. Try again later.' : 'Failed');
                                 errEl.classList.remove('hidden');
                                 return;
                             }

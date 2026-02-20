@@ -13,7 +13,7 @@ const pool = mysql.createPool({
 
 export interface User {
     id: number;
-    username: string;
+    email: string;
     password_hash: string;
     role: 'user' | 'superadmin';
     created_at: Date;
@@ -34,20 +34,20 @@ export async function query<T>(sql: string, params?: unknown[]): Promise<T> {
     return rows as T;
 }
 
-export async function getUserByUsername(username: string): Promise<User | null> {
-    const rows = await query<User[]>('SELECT id, username, password_hash, role, created_at FROM users WHERE username = ?', [username]);
+export async function getUserByEmail(email: string): Promise<User | null> {
+    const rows = await query<User[]>('SELECT id, email, password_hash, role, created_at FROM users WHERE email = ?', [email.trim().toLowerCase()]);
     return rows.length > 0 ? rows[0] : null;
 }
 
 export async function getUserById(id: number): Promise<User | null> {
-    const rows = await query<User[]>('SELECT id, username, password_hash, role, created_at FROM users WHERE id = ?', [id]);
+    const rows = await query<User[]>('SELECT id, email, password_hash, role, created_at FROM users WHERE id = ?', [id]);
     return rows.length > 0 ? rows[0] : null;
 }
 
-export async function createUser(username: string, passwordHash: string, role: 'user' | 'superadmin' = 'user'): Promise<number> {
+export async function createUser(email: string, passwordHash: string, role: 'user' | 'superadmin' = 'user'): Promise<number> {
     const [result] = await pool.execute(
-        'INSERT INTO users (username, password_hash, role) VALUES (?, ?, ?)',
-        [username, passwordHash, role]
+        'INSERT INTO users (email, password_hash, role) VALUES (?, ?, ?)',
+        [email.trim().toLowerCase(), passwordHash, role]
     );
     return (result as mysql.ResultSetHeader).insertId;
 }
