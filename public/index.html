@@ -1369,11 +1369,23 @@
                             errEl.classList.remove('hidden');
                         }
                     });
-                    document.getElementById('btnLogout').addEventListener('click', async () => {
-                        await fetch(API.AUTH_LOGOUT, { method: 'POST', ...fetchOpts });
+                    document.getElementById('btnLogout').addEventListener('click', async (e) => {
+                        e.preventDefault();
+                        const btn = document.getElementById('btnLogout');
+                        if (btn) btn.disabled = true;
+                        try {
+                            const res = await fetch(API.AUTH_LOGOUT, { method: 'POST', ...fetchOpts });
+                            if (!res.ok) {
+                                const data = await res.json().catch(() => ({}));
+                                console.error('Logout failed:', data.error || res.status);
+                            }
+                        } catch (err) {
+                            console.error('Logout request failed:', err);
+                        }
                         authUser = null;
                         auth.updateNav();
                         navigation.show('landing');
+                        if (btn) btn.disabled = false;
                     });
                     document.getElementById('btnTestDb').addEventListener('click', async () => {
                         const btn = document.getElementById('btnTestDb');

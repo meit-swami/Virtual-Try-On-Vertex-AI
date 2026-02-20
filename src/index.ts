@@ -468,8 +468,14 @@ app.get('/api/auth/me', (req: Request, res: Response) => {
 });
 
 app.post('/api/auth/logout', (req: Request, res: Response) => {
-    req.session.destroy(() => {});
-    res.json({ ok: true });
+    req.session.destroy((err) => {
+        if (err) {
+            console.error('Logout session destroy error:', err);
+            return res.status(500).json({ error: 'Logout failed' });
+        }
+        res.clearCookie('connect.sid', { path: '/', httpOnly: true, secure: process.env.NODE_ENV === 'production', sameSite: 'lax' });
+        res.json({ ok: true });
+    });
 });
 
 // ----------------------------------------------------------------------------
