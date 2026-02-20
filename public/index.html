@@ -1024,6 +1024,7 @@
             .login-required a { color: var(--accent); font-weight: 600; }
             .btn-delete { background: #ef4444; color: white; border: none; padding: 8px 16px; border-radius: 8px; cursor: pointer; font-size: 0.9em; margin-top: 12px; width: 100%; max-width: 140px; }
             .btn-delete:hover { background: #dc2626; }
+            .result-by-user { font-size: 0.85em; color: var(--text-secondary); margin-bottom: 8px; padding-bottom: 8px; border-bottom: 1px solid var(--border-light); }
             .test-db { margin-top: 24px; padding-top: 20px; border-top: 1px solid var(--border-light); }
             .test-db .btn-test-db { background: var(--bg-subtle); color: var(--text-secondary); border: 1px solid var(--border-light); padding: 10px 20px; border-radius: 8px; cursor: pointer; font-size: 0.9em; width: 100%; }
             .test-db .btn-test-db:hover { background: var(--border-light); color: var(--text-primary); }
@@ -1147,7 +1148,7 @@
 
                 <div id="results" class="results hidden">
                     <div class="result-section">
-                        <h3>✨ Generated Results</h3>
+                        <h3 id="resultsHeading">✨ Generated Results</h3>
                         <div class="result-images" id="resultImages"></div>
                     </div>
                 </div>
@@ -1857,10 +1858,15 @@
                 },
 
                 displayAllResults(resultsArray) {
+                    const headingEl = document.getElementById('resultsHeading');
+                    if (headingEl) {
+                        headingEl.textContent = authUser && authUser.role === 'superadmin' ? "✨ All users' try-on history" : '✨ Generated Results';
+                    }
                     elements.resultImagesDiv.innerHTML = resultsArray
                         .map(
                             (result) => `
                         <div class="result-card" data-result-id="${result.id}">
+                            ${result.userEmail ? `<p class="result-by-user">By: ${utils.escapeHtml(result.userEmail)}</p>` : ''}
                             <div class="result-grid">
                                 <div class="result-grid-item">
                                     <h4>👤 Person</h4>

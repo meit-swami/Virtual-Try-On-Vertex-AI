@@ -39,6 +39,8 @@ interface VirtualTryOnResult {
     personImageUrl: string;
     productImageUrl: string;
     resultImages: string[];
+    /** Set when superadmin: creator's email */
+    userEmail?: string;
 }
 
 declare global {
@@ -785,12 +787,16 @@ app.get('/api/results', requireAuth, async (req: Request, res: Response) => {
                 if (!fs.existsSync(personPath) || !fs.existsSync(productPath) || !fs.existsSync(firstResultPath)) {
                     return null;
                 }
-                return {
+                const result: VirtualTryOnResult = {
                     id: row.generation_id,
                     personImageUrl: `/uploads/${row.person_filename}`,
                     productImageUrl: `/uploads/${row.product_filename}`,
                     resultImages: resultPaths.map((f) => `/outputs/${f}`),
                 };
+                if (isSuperadmin && (row as { user_email?: string }).user_email) {
+                    result.userEmail = (row as { user_email: string }).user_email;
+                }
+                return result;
             })
             .filter((r): r is VirtualTryOnResult => r !== null);
         res.json({ results });

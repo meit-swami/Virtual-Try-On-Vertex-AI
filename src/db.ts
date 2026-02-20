@@ -43,6 +43,11 @@ export interface TryOnHistoryRow {
     created_at: Date;
 }
 
+/** Same as TryOnHistoryRow with optional creator email (for superadmin list) */
+export interface TryOnHistoryRowWithEmail extends TryOnHistoryRow {
+    user_email?: string;
+}
+
 /** Convert MySQL-style ? placeholders to pg $1, $2, ... */
 function toPgParams(sql: string): string {
     let n = 0;
@@ -137,13 +142,13 @@ export async function insertTryOnHistory(
     throw new Error('No database configured.');
 }
 
-export async function getTryOnHistoryByUser(userId: number, isSuperadmin: boolean): Promise<TryOnHistoryRow[]> {
+export async function getTryOnHistoryByUser(userId: number, isSuperadmin: boolean): Promise<TryOnHistoryRowWithEmail[]> {
     if (isSuperadmin) {
-        return query<TryOnHistoryRow[]>(
-            'SELECT id, user_id, generation_id, person_filename, product_filename, result_filenames, created_at FROM try_on_history ORDER BY created_at DESC'
+        return query<TryOnHistoryRowWithEmail[]>(
+            'SELECT t.id, t.user_id, t.generation_id, t.person_filename, t.product_filename, t.result_filenames, t.created_at, u.email AS user_email FROM try_on_history t LEFT JOIN users u ON t.user_id = u.id ORDER BY t.created_at DESC'
         );
     }
-    return query<TryOnHistoryRow[]>(
+    return query<TryOnHistoryRowWithEmail[]>(
         'SELECT id, user_id, generation_id, person_filename, product_filename, result_filenames, created_at FROM try_on_history WHERE user_id = ? ORDER BY created_at DESC',
         [userId]
     );
