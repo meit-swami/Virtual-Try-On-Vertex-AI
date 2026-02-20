@@ -674,19 +674,13 @@ app.post('/api/extract-product', async (req: Request, res: Response) => {
             req2.setTimeout(15000, () => { req2.destroy(); reject(new Error('Request timeout')); });
         });
 
-        if (html.includes('Site Maintenance') || html.includes('Something went wrong') || html.length < 1000) {
-            return res.status(403).json({
-                error: 'This site blocked the request or returned an error page. Try copying the product image URL directly or use a different site.',
-            });
-        }
-
         const $ = cheerio.load(html);
         let productImageUrl: string | null = null;
 
         const normalizeUrl = (src: string): string =>
             src.startsWith('//') ? 'https:' + src : src.startsWith('/') ? parsed.origin + src : src;
 
-        // 1. Try og:image first (common for product pages)
+        // 1. Try og:image first (common for product pages) – try even on short/error pages
         const ogImage = $('meta[property="og:image"]').attr('content');
         if (ogImage && ogImage.length > 10) {
             productImageUrl = normalizeUrl(ogImage);
@@ -731,7 +725,25 @@ app.post('/api/extract-product', async (req: Request, res: Response) => {
             }
         }
 
-        // 4. Fallback: find product-like images (src or data-src for lazy load)
+        // 4. Meesho-specific (when page loads): common PDP image patterns
+        if (!productImageUrl && parsed.hostname.includes('meesho')) {
+            const meeshoSelectors = [
+                'img[class*="ProductImage"]', 'img[class*="product-image"]', '[class*="ImageContainer"] img',
+                '.product-detail img', '[data-src*="meesho"]', 'img[src*="meesho"]',
+            ];
+            for (const sel of meeshoSelectors) {
+                $(sel).each((_, el) => {
+                    const src = $(el).attr('src') || $(el).attr('data-src');
+                    if (src && src.match(/\.(jpg|jpeg|png|webp)/i) && !src.includes('logo')) {
+                        productImageUrl = normalizeUrl(src);
+                        return false;
+                    }
+                });
+                if (productImageUrl) break;
+            }
+        }
+
+        // 5. Fallback: find product-like images (src or data-src for lazy load)
         if (!productImageUrl) {
             const selectors = [
                 'img[data-product-image]', 'img.product-image', '.product img', '.product-image img',
@@ -754,6 +766,15 @@ app.post('/api/extract-product', async (req: Request, res: Response) => {
         }
 
         if (!productImageUrl) {
+            const looksBlocked = html.includes('Site Maintenance') || html.includes('Something went wrong') || html.length < 1000;
+            const isMeesho = parsed.hostname.includes('meesho');
+            if (looksBlocked) {
+                const workaround = 'Open the product page in your browser → right‑click the main product image → Copy image address. Then go to Try On, paste that image URL in the product image area (if supported) or download the image and upload it.';
+                const msg = isMeesho
+                    ? `Meesho often blocks automated requests. ${workaround}`
+                    : `This site blocked the request or returned an error page. ${workaround}`;
+                return res.status(403).json({ error: msg });
+            }
             return res.status(404).json({ error: 'Could not find product image on this page' });
         }
 
