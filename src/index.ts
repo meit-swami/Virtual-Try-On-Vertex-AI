@@ -751,7 +751,9 @@ app.get('/api/results', requireAuth, async (req: Request, res: Response) => {
                 const productPath = path.join(uploadsDir, row.product_filename);
                 let resultPaths: string[] = [];
                 try {
-                    resultPaths = JSON.parse(row.result_filenames) as string[];
+                    resultPaths = Array.isArray(row.result_filenames)
+                        ? (row.result_filenames as string[])
+                        : (JSON.parse(row.result_filenames) as string[]);
                 } catch {
                     resultPaths = [];
                 }
@@ -795,7 +797,9 @@ app.delete('/api/results/:id', requireAuth, async (req: Request, res: Response) 
         }
         let resultFilenames: string[] = [];
         try {
-            resultFilenames = JSON.parse(row.result_filenames) as string[];
+            resultFilenames = Array.isArray(row.result_filenames)
+                ? (row.result_filenames as string[])
+                : (JSON.parse(row.result_filenames) as string[]);
         } catch {
             /* ignore */
         }

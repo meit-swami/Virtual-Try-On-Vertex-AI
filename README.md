@@ -34,4 +34,22 @@ npm start
 # The app will be available at http://localhost:3000
 ```
 
+#### Database (login & per-user history)
+
+The app supports **PostgreSQL** (recommended on Render) or **MySQL**.
+
+**Option A – Render PostgreSQL**
+
+1. In [Render Dashboard](https://dashboard.render.com), create a **PostgreSQL** instance and link it to your web service (or note the **Internal Database URL**).
+2. In your web service, add the env var **`DATABASE_URL`** (Render often adds it automatically when you connect the DB).
+3. Run the schema once: in Render → your PostgreSQL → **Shell**, or use **Connect** → run the SQL from `database/schema.pg.sql`.
+4. Redeploy. Use **Test DB connection** on the Login page to confirm.
+
+**Option B – MySQL (PlanetScale, Railway, or local)**
+
+1. Leave `DATABASE_URL` **unset**.
+2. Set `DB_HOST`, `DB_USER`, `DB_PASSWORD`, `DB_NAME` in your environment (see `.env.example`).
+3. Run `database/schema.sql` in your MySQL (e.g. PlanetScale Console, phpMyAdmin, or `mysql` CLI).
+4. Redeploy and test.
+
 📺 **Video:** [Watch on YouTube](https://youtu.be/CE-kl2thPXg)
