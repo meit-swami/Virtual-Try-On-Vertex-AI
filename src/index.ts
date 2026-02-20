@@ -337,6 +337,10 @@ function initializeApp(): void {
 // ============================================================================
 
 const app = express();
+
+// Required on Render/Heroku etc.: trust the reverse proxy so req.secure and cookies work
+app.set('trust proxy', 1);
+
 app.use(cors({ origin: true, credentials: true }));
 app.use(express.json());
 
@@ -861,5 +865,6 @@ app.listen(CONFIG.PORT, async () => {
     console.log(`🚀 Server running on http://localhost:${CONFIG.PORT}`);
     console.log(`📁 Uploads directory: ${PATHS.UPLOADS}`);
     console.log(`📁 Outputs directory: ${PATHS.OUTPUTS}`);
+    console.log(process.env.DATABASE_URL ? '🔐 Sessions: PostgreSQL (persistent)' : '⚠️ Sessions: in-memory (set DATABASE_URL on Render for persistent login)');
     await seedSuperadminIfNeeded();
 });
