@@ -20,6 +20,7 @@ import {
     getTryOnHistoryByUser,
     getTryOnByGenerationId,
     deleteTryOnHistory,
+    testConnection,
     type User,
 } from './db';
 
@@ -446,6 +447,27 @@ app.get('/api/auth/me', (req: Request, res: Response) => {
 app.post('/api/auth/logout', (req: Request, res: Response) => {
     req.session.destroy(() => {});
     res.json({ ok: true });
+});
+
+// ----------------------------------------------------------------------------
+// Temporary: test DB connection (remove in production if desired)
+// ----------------------------------------------------------------------------
+app.get('/api/test-db', async (_req: Request, res: Response) => {
+    try {
+        const result = await testConnection();
+        res.json(result);
+    } catch (e: unknown) {
+        const err = e as { code?: string; message?: string; errno?: number };
+        const code = err?.code ?? 'UNKNOWN';
+        const msg = err?.message ?? String(e);
+        console.error('Test DB failed:', code, msg);
+        res.status(503).json({
+            ok: false,
+            error: 'Database connection failed',
+            code,
+            message: msg,
+        });
+    }
 });
 
 // Multer configuration

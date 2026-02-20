@@ -1024,6 +1024,14 @@
             .login-required a { color: var(--accent); font-weight: 600; }
             .btn-delete { background: #ef4444; color: white; border: none; padding: 8px 16px; border-radius: 8px; cursor: pointer; font-size: 0.9em; margin-top: 12px; width: 100%; max-width: 140px; }
             .btn-delete:hover { background: #dc2626; }
+            .test-db { margin-top: 24px; padding-top: 20px; border-top: 1px solid var(--border-light); }
+            .test-db .btn-test-db { background: var(--bg-subtle); color: var(--text-secondary); border: 1px solid var(--border-light); padding: 10px 20px; border-radius: 8px; cursor: pointer; font-size: 0.9em; width: 100%; }
+            .test-db .btn-test-db:hover { background: var(--border-light); color: var(--text-primary); }
+            .test-db .btn-test-db:disabled { opacity: 0.6; cursor: not-allowed; }
+            .test-db-result { margin-top: 12px; padding: 12px; border-radius: 8px; font-size: 0.9em; display: none; }
+            .test-db-result.testing { display: block; background: var(--bg-subtle); color: var(--text-secondary); border: 1px solid var(--border-light); }
+            .test-db-result.success { display: block; background: rgba(52, 211, 153, 0.15); color: #059669; border: 1px solid var(--success); }
+            .test-db-result.fail { display: block; background: #fef2f2; color: #dc2626; border: 1px solid #ef4444; }
         </style>
     </head>
     <body>
@@ -1083,6 +1091,10 @@
                     <input type="password" id="authPassword" name="password" required autocomplete="current-password" placeholder="Min 6 characters" />
                     <button type="submit" class="btn" id="authSubmit">Login</button>
                 </form>
+                <div class="test-db">
+                    <button type="button" class="btn-test-db" id="btnTestDb">Test DB connection</button>
+                    <div id="testDbResult" class="test-db-result" role="status"></div>
+                </div>
             </div>
         </section>
 
@@ -1233,6 +1245,7 @@
                 AUTH_LOGIN: '/api/auth/login',
                 AUTH_REGISTER: '/api/auth/register',
                 AUTH_LOGOUT: '/api/auth/logout',
+                TEST_DB: '/api/test-db',
             };
             const fetchOpts = { credentials: 'include' };
 
@@ -1361,6 +1374,28 @@
                         authUser = null;
                         auth.updateNav();
                         navigation.show('landing');
+                    });
+                    document.getElementById('btnTestDb').addEventListener('click', async () => {
+                        const btn = document.getElementById('btnTestDb');
+                        const resultEl = document.getElementById('testDbResult');
+                        btn.disabled = true;
+                        resultEl.className = 'test-db-result testing';
+                        resultEl.textContent = 'Testing…';
+                        try {
+                            const res = await fetch(API.TEST_DB, fetchOpts);
+                            const data = await res.json().catch(() => ({}));
+                            if (res.ok && data.ok) {
+                                resultEl.textContent = data.message || 'Database connection successful.';
+                                resultEl.className = 'test-db-result success';
+                            } else {
+                                resultEl.textContent = data.message || data.error || 'Connection failed. ' + (data.code ? '(' + data.code + ')' : '');
+                                resultEl.className = 'test-db-result fail';
+                            }
+                        } catch (e) {
+                            resultEl.textContent = 'Network error: ' + (e.message || 'Could not reach server');
+                            resultEl.className = 'test-db-result fail';
+                        }
+                        btn.disabled = false;
                     });
                 },
             };

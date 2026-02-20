@@ -34,6 +34,17 @@ export async function query<T>(sql: string, params?: unknown[]): Promise<T> {
     return rows as T;
 }
 
+/** Temporary: test that the DB is reachable. Throws on failure. */
+export async function testConnection(): Promise<{ ok: true; message: string }> {
+    const conn = await pool.getConnection();
+    try {
+        await conn.ping();
+        return { ok: true, message: 'Database connection successful.' };
+    } finally {
+        conn.release();
+    }
+}
+
 export async function getUserByEmail(email: string): Promise<User | null> {
     const rows = await query<User[]>('SELECT id, email, password_hash, role, created_at FROM users WHERE email = ?', [email.trim().toLowerCase()]);
     return rows.length > 0 ? rows[0] : null;
