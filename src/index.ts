@@ -2,6 +2,7 @@
 import dotenv from 'dotenv';
 import express, { Request, Response } from 'express';
 import session from 'express-session';
+import connectPgSimple from 'connect-pg-simple';
 import multer from 'multer';
 import cors from 'cors';
 import bcrypt from 'bcrypt';
@@ -338,14 +339,27 @@ function initializeApp(): void {
 const app = express();
 app.use(cors({ origin: true, credentials: true }));
 app.use(express.json());
-app.use(
-    session({
-        secret: process.env.SESSION_SECRET || 'zaha-ai-secret-change-in-production',
-        resave: false,
-        saveUninitialized: false,
-        cookie: { secure: process.env.NODE_ENV === 'production', httpOnly: true, maxAge: 7 * 24 * 60 * 60 * 1000 },
-    })
-);
+
+// Use PostgreSQL session store when DATABASE_URL is set (persists across Render instances/restarts)
+const sessionConfig: session.SessionOptions = {
+    secret: process.env.SESSION_SECRET || 'zaha-ai-secret-change-in-production',
+    resave: false,
+    saveUninitialized: false,
+    cookie: {
+        secure: process.env.NODE_ENV === 'production',
+        httpOnly: true,
+        maxAge: 7 * 24 * 60 * 60 * 1000,
+        sameSite: 'lax',
+    },
+};
+if (process.env.DATABASE_URL) {
+    const PgSession = connectPgSimple(session);
+    sessionConfig.store = new PgSession({
+        conString: process.env.DATABASE_URL,
+        createTableIfMissing: true,
+    });
+}
+app.use(session(sessionConfig));
 app.use(
     express.static('public', {
         setHeaders: (res) => {
