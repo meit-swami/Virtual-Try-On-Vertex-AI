@@ -440,7 +440,12 @@ app.post('/api/auth/login', async (req: Request, res: Response) => {
 });
 
 app.get('/api/auth/me', (req: Request, res: Response) => {
-    if (!req.user) return res.status(401).json({ error: 'Not logged in' });
+    if (!req.user) {
+        if (req.get('X-Silent-Session-Check') === '1') {
+            return res.json({ user: null });
+        }
+        return res.status(401).json({ error: 'Not logged in' });
+    }
     res.json({ user: { id: req.user.id, email: req.user.email, role: req.user.role } });
 });
 

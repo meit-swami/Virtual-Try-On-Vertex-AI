@@ -1260,9 +1260,9 @@
             const auth = {
                 async check() {
                     try {
-                        const res = await fetch(API.AUTH_ME, fetchOpts);
-                        if (res.ok) {
-                            const data = await res.json();
+                        const res = await fetch(API.AUTH_ME, { ...fetchOpts, headers: { 'X-Silent-Session-Check': '1' } });
+                        const data = await res.json().catch(() => ({}));
+                        if (data.user) {
                             authUser = data.user;
                             return true;
                         }
@@ -1388,7 +1388,12 @@
                                 resultEl.textContent = data.message || 'Database connection successful.';
                                 resultEl.className = 'test-db-result success';
                             } else {
-                                resultEl.textContent = data.message || data.error || 'Connection failed. ' + (data.code ? '(' + data.code + ')' : '');
+                                let msg = data.message || data.error || 'Connection failed.';
+                                if (data.code) msg += ' (' + data.code + ')';
+                                if (data.code === 'ECONNREFUSED' || data.code === 'ETIMEDOUT') {
+                                    msg += ' The database server is not reachable from this host. If you\'re on Render, use a DB that allows external connections (e.g. Render PostgreSQL, PlanetScale, Railway) or deploy the app on the same host as MySQL (e.g. Hostinger).';
+                                }
+                                resultEl.textContent = msg;
                                 resultEl.className = 'test-db-result fail';
                             }
                         } catch (e) {
