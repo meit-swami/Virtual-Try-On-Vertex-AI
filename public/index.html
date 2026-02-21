@@ -425,6 +425,66 @@
                 transform: scale(1.03);
             }
 
+            .in-progress-section {
+                margin-top: 30px;
+                padding: 20px;
+                background: rgba(56, 193, 183, 0.08);
+                border-radius: 15px;
+                border: 1px dashed var(--accent);
+            }
+
+            .in-progress-heading {
+                color: var(--text-primary);
+                margin-bottom: 16px;
+                font-size: 1.1em;
+            }
+
+            .in-progress-list {
+                display: grid;
+                grid-template-columns: repeat(auto-fill, minmax(180px, 1fr));
+                gap: 16px;
+            }
+
+            .in-progress-card {
+                background: var(--bg-card);
+                border-radius: 12px;
+                padding: 12px;
+                border: 1px solid var(--border-light);
+                display: flex;
+                flex-direction: column;
+                align-items: center;
+                gap: 10px;
+            }
+
+            .in-progress-preview {
+                display: flex;
+                gap: 8px;
+                width: 100%;
+                justify-content: center;
+            }
+
+            .in-progress-preview img {
+                width: 60px;
+                height: 60px;
+                object-fit: cover;
+                border-radius: 8px;
+                border: 1px solid var(--border-light);
+            }
+
+            .in-progress-spinner {
+                width: 28px;
+                height: 28px;
+                border: 3px solid var(--border-light);
+                border-top-color: var(--accent);
+                border-radius: 50%;
+                animation: spin 0.8s linear infinite;
+            }
+
+            .in-progress-card p {
+                font-size: 0.85em;
+                color: var(--text-secondary);
+            }
+
             /* Modal Styles */
             .modal {
                 display: none;
@@ -1141,9 +1201,10 @@
 
                 <div id="status" class="status hidden"></div>
                 <div id="error" class="error hidden"></div>
-                <div id="loading" class="loading hidden">
-                    <div class="spinner"></div>
-                    <p>Generating virtual try-on... This may take a minute.</p>
+
+                <div id="inProgressSection" class="in-progress-section hidden">
+                    <h3 class="in-progress-heading">⏳ Generating in background</h3>
+                    <div id="inProgressList" class="in-progress-list"></div>
                 </div>
 
                 <div id="results" class="results hidden">
@@ -1754,15 +1815,21 @@
             // ============================================================================
             // API & Data Management
             // ============================================================================
+            let taskIdCounter = 0;
+            const elementsInProgress = {
+                section: document.getElementById('inProgressSection'),
+                list: document.getElementById('inProgressList'),
+            };
+
             const api = {
                 async generateVirtualTryOn() {
                     const hasProduct = state.productFile || prefillProductUrl;
                     if (!state.personFile || !hasProduct) return;
 
                     ui.hideError();
-                    ui.showLoading('Generating virtual try-on...');
-                    elements.generateBtn.disabled = true;
-                    elements.resultsDiv.classList.add('hidden');
+
+                    const personPreview = state.personImagePreview;
+                    const productPreview = state.productImagePreview || prefillProductUrl;
 
                     const formData = new FormData();
                     formData.append('personImage', state.personFile);
@@ -1783,13 +1850,47 @@
                     }
                     formData.append('sampleCount', '1');
 
+                    const taskId = ++taskIdCounter;
+                    fileHandler.clearAllImages();
+                    api.addToInProgress(taskId, personPreview, productPreview);
+                    ui.updateGenerateButton();
+
+                    api.runGenerationInBackground(formData, taskId);
+                },
+
+                addToInProgress(taskId, personPreview, productPreview) {
+                    const card = document.createElement('div');
+                    card.className = 'in-progress-card';
+                    card.dataset.taskId = String(taskId);
+                    const personSrc = typeof personPreview === 'string' ? personPreview : '';
+                    const productSrc = typeof productPreview === 'string' ? productPreview : '';
+                    card.innerHTML = `
+                        <div class="in-progress-preview">
+                            ${personSrc ? `<img src="${personSrc.replace(/"/g, '&quot;')}" alt="Person">` : ''}
+                            ${productSrc ? `<img src="${productSrc.replace(/"/g, '&quot;')}" alt="Product">` : ''}
+                        </div>
+                        <div class="in-progress-spinner"></div>
+                        <p>Generating...</p>
+                    `;
+                    if (elementsInProgress.list) elementsInProgress.list.appendChild(card);
+                    if (elementsInProgress.section) elementsInProgress.section.classList.remove('hidden');
+                },
+
+                removeFromInProgress(taskId) {
+                    const card = elementsInProgress.list?.querySelector(`[data-task-id="${taskId}"]`);
+                    if (card) card.remove();
+                    if (elementsInProgress.list?.children.length === 0 && elementsInProgress.section) {
+                        elementsInProgress.section.classList.add('hidden');
+                    }
+                },
+
+                async runGenerationInBackground(formData, taskId) {
                     try {
                         const response = await fetch(API.VIRTUAL_TRY_ON, {
                             method: 'POST',
                             body: formData,
                             credentials: 'include',
                         });
-
                         const data = await response.json();
 
                         if (response.status === 401) {
@@ -1801,18 +1902,11 @@
                             throw new Error(data.error || 'Failed to generate virtual try-on');
                         }
 
-                        // Clear upload areas after successful generation
-                        fileHandler.clearAllImages();
-
-                        results.displayResults(data);
-                        ui.hideLoading();
+                        api.removeFromInProgress(taskId);
+                        results.appendSingleResult(data);
                     } catch (error) {
-                        ui.showError(
-                            error.message || 'An error occurred while generating virtual try-on'
-                        );
-                        ui.hideLoading();
-                    } finally {
-                        elements.generateBtn.disabled = false;
+                        api.removeFromInProgress(taskId);
+                        ui.showError(error.message || 'An error occurred while generating virtual try-on');
                     }
                 },
 
@@ -1855,6 +1949,69 @@
                         return;
                     }
                     api.loadAllResults();
+                },
+
+                appendSingleResult(data) {
+                    if (!data.resultImages || data.resultImages.length === 0) return;
+                    const result = {
+                        id: data.id,
+                        personImageUrl: data.personImageUrl,
+                        productImageUrl: data.productImageUrl,
+                        resultImages: data.resultImages,
+                    };
+                    const cardHtml = `
+                        <div class="result-card" data-result-id="${result.id}">
+                            <div class="result-grid">
+                                <div class="result-grid-item">
+                                    <h4>👤 Person</h4>
+                                    <div class="result-image-wrapper">
+                                        <img src="${utils.escapeHtml(result.personImageUrl)}" alt="Person Image" class="result-image-clickable" data-image-url="${utils.escapeHtml(result.personImageUrl)}">
+                                    </div>
+                                </div>
+                                <div class="result-grid-item">
+                                    <h4>🛍️ Product</h4>
+                                    <div class="result-image-wrapper">
+                                        <img src="${utils.escapeHtml(result.productImageUrl)}" alt="Product Image" class="result-image-clickable" data-image-url="${utils.escapeHtml(result.productImageUrl)}">
+                                    </div>
+                                </div>
+                                <div class="result-grid-item">
+                                    <h4>✨ Result</h4>
+                                    <div class="result-image-wrapper">
+                                        <img src="${utils.escapeHtml(result.resultImages[0])}" alt="Virtual Try-On Result" class="result-image-clickable" data-image-url="${utils.escapeHtml(result.resultImages[0])}">
+                                    </div>
+                                </div>
+                            </div>
+                            <button type="button" class="btn-delete" data-delete-id="${result.id}" title="Remove from history permanently">Delete</button>
+                        </div>
+                    `;
+                    elements.resultImagesDiv.insertAdjacentHTML('afterbegin', cardHtml);
+                    elements.resultsDiv.classList.remove('hidden');
+                    const newCard = elements.resultImagesDiv.firstElementChild;
+                    if (newCard) {
+                        newCard.querySelectorAll('.result-image-clickable').forEach((img) => {
+                            img.addEventListener('click', () => {
+                                const url = img.getAttribute('data-image-url');
+                                if (url) modal.open(url);
+                            });
+                        });
+                        newCard.querySelectorAll('.btn-delete[data-delete-id]').forEach((btn) => {
+                            btn.addEventListener('click', async () => {
+                                const id = btn.getAttribute('data-delete-id');
+                                if (!id || !confirm('Remove this try-on from history permanently?')) return;
+                                try {
+                                    const res = await fetch(`${API.RESULTS}/${id}`, { method: 'DELETE', ...fetchOpts });
+                                    if (!res.ok) {
+                                        const d = await res.json().catch(() => ({}));
+                                        alert(d.error || 'Failed to delete');
+                                        return;
+                                    }
+                                    api.loadAllResults();
+                                } catch (e) {
+                                    alert('Failed to delete');
+                                }
+                            });
+                        });
+                    }
                 },
 
                 displayAllResults(resultsArray) {

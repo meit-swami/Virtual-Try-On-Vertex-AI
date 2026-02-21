@@ -51,5 +51,3 @@ The app supports **PostgreSQL** (recommended on Render) or **MySQL**.
 2. Set `DB_HOST`, `DB_USER`, `DB_PASSWORD`, `DB_NAME` in your environment (see `.env.example`).
 3. Run `database/schema.sql` in your MySQL (e.g. PlanetScale Console, phpMyAdmin, or `mysql` CLI).
 4. Redeploy and test.
-
-📺 **Video:** [Watch on YouTube](https://youtu.be/CE-kl2thPXg)
