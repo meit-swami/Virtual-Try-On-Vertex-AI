@@ -363,7 +363,9 @@ const sessionConfig: session.SessionOptions = {
     resave: false,
     saveUninitialized: false,
     cookie: {
-        secure: process.env.NODE_ENV === 'production',
+        // Set COOKIE_SECURE=true only when serving over HTTPS (Render, nginx+SSL).
+        // On EC2 over plain HTTP, leave unset or COOKIE_SECURE=false so login cookies work.
+        secure: process.env.COOKIE_SECURE === 'true',
         httpOnly: true,
         maxAge: 7 * 24 * 60 * 60 * 1000,
         sameSite: 'lax',
@@ -494,7 +496,7 @@ app.post('/api/auth/logout', (req: Request, res: Response) => {
             console.error('Logout session destroy error:', err);
             return res.status(500).json({ error: 'Logout failed' });
         }
-        res.clearCookie('connect.sid', { path: '/', httpOnly: true, secure: process.env.NODE_ENV === 'production', sameSite: 'lax' });
+        res.clearCookie('connect.sid', { path: '/', httpOnly: true, secure: process.env.COOKIE_SECURE === 'true', sameSite: 'lax' });
         res.json({ ok: true });
     });
 });
