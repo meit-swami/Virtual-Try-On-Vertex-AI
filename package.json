@@ -5,8 +5,8 @@
   "main": "dist/index.js",
   "scripts": {
     "build": "tsc",
-    "start": "node dist/index.js",
-    "dev": "ts-node src/index.ts",
+    "start": "node -r dotenv/config dist/index.js",
+    "dev": "node -r dotenv/config node_modules/ts-node/dist/bin.js src/index.ts",
     "format": "prettier --write \"src/**/*.{ts,js}\" \"public/**/*.{html,css,js}\""
   },
   "keywords": [],
