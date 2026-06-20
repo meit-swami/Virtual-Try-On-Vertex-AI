@@ -24,7 +24,10 @@
             api: config.apiUrl.replace(/\/$/, ''),
         });
         if (config.productUrl) params.set('productUrl', config.productUrl);
-        if (config.productImage) params.set('productImage', config.productImage);
+        if (config.productImage) {
+            const img = String(config.productImage).trim();
+            params.set('productImage', img.startsWith('//') ? 'https:' + img : img);
+        }
 
         const embedUrl = config.apiUrl.replace(/\/$/, '') + '/embed.html?' + params.toString();
 

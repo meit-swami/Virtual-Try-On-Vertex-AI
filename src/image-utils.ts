@@ -69,9 +69,24 @@ export function preferJpegProductUrl(url: string): string {
     return url;
 }
 
+/**
+ * Normalize image URLs for server-side fetch (Shopify often emits //cdn.shopify.com/...).
+ */
+export function normalizeImageUrl(url: string, baseOrigin?: string): string {
+    let s = url.trim();
+    if (!s) throw new Error('Product image URL is empty');
+    if (s.startsWith('//')) s = 'https:' + s;
+    else if (s.startsWith('/') && baseOrigin) s = baseOrigin.replace(/\/$/, '') + s;
+    const parsed = new URL(s);
+    if (!['http:', 'https:'].includes(parsed.protocol)) {
+        throw new Error('Product image URL must use http or https');
+    }
+    return preferJpegProductUrl(parsed.href);
+}
+
 /** Pick file extension from URL */
 export function extFromUrl(url: string): string {
-    const pathname = new URL(url).pathname.toLowerCase();
+    const pathname = new URL(normalizeImageUrl(url)).pathname.toLowerCase();
     if (pathname.endsWith('.webp')) return '.webp';
     if (pathname.endsWith('.png')) return '.png';
     if (pathname.endsWith('.gif')) return '.gif';
@@ -85,9 +100,10 @@ export async function downloadAndPrepareProductImage(
     generationId: number,
     downloadFn: (url: string, dest: string) => Promise<void>
 ): Promise<string> {
-    const ext = extFromUrl(imageUrl);
+    const normalizedUrl = normalizeImageUrl(imageUrl);
+    const ext = extFromUrl(normalizedUrl);
     const rawPath = path.join(destDir, `product-${generationId}-raw${ext}`);
-    await downloadFn(imageUrl, rawPath);
+    await downloadFn(normalizedUrl, rawPath);
     const prepared = await prepareImageForVertexAI(rawPath, 'Product image');
     const finalPath = path.join(destDir, `product-${generationId}.jpg`);
     fs.copyFileSync(prepared, finalPath);

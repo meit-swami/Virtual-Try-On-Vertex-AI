@@ -26,7 +26,7 @@ import {
 } from './db';
 import { registerPluginRoutes } from './plugin-routes';
 import { runPluginMigrations, seedDefaultPromoAndSite } from './plugin-db';
-import { prepareImageForVertexAI, cleanupPreparedImage, downloadAndPrepareProductImage, preferJpegProductUrl } from './image-utils';
+import { prepareImageForVertexAI, cleanupPreparedImage, downloadAndPrepareProductImage, preferJpegProductUrl, normalizeImageUrl } from './image-utils';
 
 // Load environment variables
 dotenv.config();
@@ -566,15 +566,27 @@ const upload = multer({
 // ============================================================================
 
 async function downloadImageToFile(imageUrl: string, destPath: string): Promise<void> {
-    const url = new URL(imageUrl);
+    const fetchUrl = normalizeImageUrl(imageUrl);
+    const url = new URL(fetchUrl);
     const lib = url.protocol === 'https:' ? https : http;
     await new Promise<void>((resolve, reject) => {
-        const req2 = lib.get(imageUrl, { headers: { 'User-Agent': 'Mozilla/5.0' } }, (r) => {
+        const req2 = lib.get(fetchUrl, { headers: { 'User-Agent': 'Mozilla/5.0' } }, (r) => {
+            if (r.statusCode && r.statusCode >= 300 && r.statusCode < 400 && r.headers.location) {
+                req2.destroy();
+                downloadImageToFile(r.headers.location, destPath).then(resolve).catch(reject);
+                return;
+            }
+            if (r.statusCode && r.statusCode >= 400) {
+                reject(new Error(`Failed to download image (HTTP ${r.statusCode})`));
+                return;
+            }
             const file = fs.createWriteStream(destPath);
             r.pipe(file);
             file.on('finish', () => { file.close(); resolve(); });
+            file.on('error', reject);
         });
         req2.on('error', reject);
+        req2.setTimeout(30000, () => { req2.destroy(); reject(new Error('Image download timeout')); });
     });
 }
 

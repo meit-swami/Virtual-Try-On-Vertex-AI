@@ -9,7 +9,7 @@
       apiUrl: 'YOUR_ZAHA_API_URL',
       apiKey: 'YOUR_API_KEY',
       productUrl: '{{ product.url | absolute_url }}',
-      productImage: '{{ product.featured_image | image_url: width: 800 }}',
+      productImage: 'https:{{ product.featured_image | image_url: width: 800 }}',
       buttonText: '✨ Virtual Try-On',
       target: '#zaha-try-on-shopify'
     });

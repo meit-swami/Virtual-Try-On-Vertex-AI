@@ -68,10 +68,17 @@
         const PRODUCT_URL = params.get('productUrl') || params.get('product') || '';
         const PRODUCT_IMAGE = params.get('productImage') || '';
 
+        function normalizeProductUrl(url) {
+            if (!url) return '';
+            const s = url.trim();
+            if (s.startsWith('//')) return 'https:' + s;
+            return s;
+        }
+
         let sessionToken = localStorage.getItem('zaha_session_' + API_KEY) || '';
         let credits = 0;
         let personFile = null;
-        let productImageUrl = PRODUCT_IMAGE;
+        let productImageUrl = normalizeProductUrl(PRODUCT_IMAGE);
 
         const $ = (id) => document.getElementById(id);
         const showErr = (msg) => { $('errBox').style.display = 'block'; $('errBox').textContent = msg; };
