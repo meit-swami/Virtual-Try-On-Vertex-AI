@@ -12,6 +12,8 @@ module.exports = {
             env: {
                 NODE_ENV: 'production',
                 PORT: 3001,
+                // EC2 often resolves Google hostnames to IPv6 but has no IPv6 route — prefer IPv4
+                NODE_OPTIONS: '--dns-result-order=ipv4first',
             },
         },
     ],

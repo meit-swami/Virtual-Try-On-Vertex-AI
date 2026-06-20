@@ -5,7 +5,7 @@
   "main": "dist/index.js",
   "scripts": {
     "build": "tsc",
-    "start": "node -r dotenv/config dist/index.js",
+    "start": "node --dns-result-order=ipv4first -r dotenv/config dist/index.js",
     "dev": "node -r dotenv/config node_modules/ts-node/dist/bin.js src/index.ts",
     "format": "prettier --write \"src/**/*.{ts,js}\" \"public/**/*.{html,css,js}\""
   },
