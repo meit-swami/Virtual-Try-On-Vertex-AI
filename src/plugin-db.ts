@@ -235,5 +235,10 @@ export async function seedDefaultPromoAndSite(): Promise<void> {
     if (siteCount === 0) {
         const site = await createPluginSite('Local Dev Store', 'wordpress', 'localhost,indianvirasat.com');
         console.log(`🔌 Plugin API key (save for WordPress/Shopify): ${site.api_key}`);
+    } else {
+        const sites = await listPluginSites();
+        for (const s of sites) {
+            console.log(`🔌 Plugin site "${s.name}" (${s.platform}) API key: ${s.api_key}`);
+        }
     }
 }

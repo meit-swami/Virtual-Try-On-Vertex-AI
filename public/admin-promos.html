@@ -95,11 +95,16 @@
         };
 
         document.getElementById('loginBtn').onclick = async () => {
+            document.getElementById('loginErr').textContent = '';
             try {
                 await api('/api/auth/login', { method: 'POST', body: JSON.stringify({
                     email: document.getElementById('email').value,
                     password: document.getElementById('password').value,
                 })});
+                const me = await api('/api/auth/me');
+                if (!me.user || me.user.role !== 'superadmin') {
+                    throw new Error('This account is not a superadmin. Use superadmin@zaha.ai / admin123');
+                }
                 document.getElementById('loginBox').style.display = 'none';
                 document.getElementById('adminPanel').style.display = 'block';
                 loadPromos(); loadSites();
