@@ -38,7 +38,7 @@
             const frame = document.createElement('iframe');
             frame.src = embedUrl;
             frame.style.cssText =
-                'width:100%;max-width:520px;height:90vh;max-height:720px;border:none;border-radius:16px;background:#fff;';
+                'width:min(720px,96vw);height:min(920px,94vh);border:none;border-radius:16px;background:#fff;box-shadow:0 24px 48px rgba(0,0,0,0.25);';
             const close = document.createElement('button');
             close.textContent = '×';
             close.style.cssText =
