@@ -6,6 +6,7 @@ module.exports = {
             script: 'dist/index.js',
             node_args: '-r dotenv/config',
             cwd: __dirname,
+            exec_mode: 'fork',
             instances: 1,
             autorestart: true,
             max_memory_restart: '512M',

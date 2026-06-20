@@ -10,7 +10,6 @@ import fs from 'fs';
 import path from 'path';
 import https from 'https';
 import http from 'http';
-import { GoogleAuth } from 'google-auth-library';
 import * as cheerio from 'cheerio';
 import {
     getUserByEmail,
@@ -27,6 +26,7 @@ import {
 import { registerPluginRoutes } from './plugin-routes';
 import { runPluginMigrations, seedDefaultPromoAndSite } from './plugin-db';
 import { prepareImageForVertexAI, cleanupPreparedImage, downloadAndPrepareProductImage, preferJpegProductUrl, normalizeImageUrl } from './image-utils';
+import { getServiceAccountAccessTokenWithRetry, httpsRequest } from './gcp-auth';
 
 // Load environment variables
 dotenv.config();
@@ -125,10 +125,6 @@ function normalizePrivateKey(credentials: Record<string, unknown>): void {
     }
 }
 
-async function sleep(ms: number): Promise<void> {
-    return new Promise((resolve) => setTimeout(resolve, ms));
-}
-
 const IMAGE_EXTENSIONS = ['.jpg', '.jpeg', '.png', '.gif', '.webp'] as const;
 
 const MIME_TYPES: Record<string, string> = {
@@ -186,46 +182,11 @@ class FileUtils {
     }
 }
 
-function getGoogleAuthOptions(): { keyFilename?: string; credentials?: object } {
-    if (cachedServiceAccountCredentials) {
-        return { credentials: cachedServiceAccountCredentials };
-    }
-    if (resolvedServiceAccountKeyPath) {
-        return { keyFilename: resolvedServiceAccountKeyPath };
-    }
-    throw new Error('Google service account credentials are not configured.');
-}
-
-async function fetchGoogleAccessToken(): Promise<string> {
-    const auth = new GoogleAuth({
-        ...getGoogleAuthOptions(),
-        scopes: ['https://www.googleapis.com/auth/cloud-platform'],
-    });
-    const client = await auth.getClient();
-    const accessToken = await client.getAccessToken();
-    if (!accessToken.token) {
-        throw new Error('Failed to obtain access token');
-    }
-    return accessToken.token;
-}
-
 async function fetchGoogleAccessTokenWithRetry(maxAttempts = 4): Promise<string> {
-    let lastError: Error | undefined;
-    for (let attempt = 1; attempt <= maxAttempts; attempt++) {
-        try {
-            return await fetchGoogleAccessToken();
-        } catch (e: unknown) {
-            lastError = e as Error;
-            const msg = lastError.message || String(e);
-            const retryable =
-                /premature close|econnreset|etimedout|socket hang up|fetch failed|network/i.test(msg);
-            if (!retryable || attempt === maxAttempts) break;
-            const delayMs = 1000 * attempt;
-            console.warn(`Google token fetch attempt ${attempt} failed (${msg}). Retrying in ${delayMs}ms…`);
-            await sleep(delayMs);
-        }
+    if (!cachedServiceAccountCredentials) {
+        throw new Error('Google service account credentials are not configured.');
     }
-    throw lastError ?? new Error('Failed to obtain Google access token');
+    return getServiceAccountAccessTokenWithRetry(cachedServiceAccountCredentials, maxAttempts);
 }
 
 class VirtualTryOnService {
@@ -282,23 +243,27 @@ class VirtualTryOnService {
                 },
             };
 
-            const response = await fetch(apiEndpoint, {
+            const requestBodyStr = JSON.stringify(requestBody);
+
+            const { statusCode, body: responseText } = await httpsRequest({
+                url: apiEndpoint,
                 method: 'POST',
                 headers: {
                     Authorization: `Bearer ${accessToken}`,
                     'Content-Type': 'application/json; charset=utf-8',
+                    'Content-Length': String(Buffer.byteLength(requestBodyStr)),
                 },
-                body: JSON.stringify(requestBody),
+                body: requestBodyStr,
+                timeoutMs: 180_000,
             });
 
-            if (!response.ok) {
-                const errorText = await response.text();
+            if (statusCode < 200 || statusCode >= 300) {
                 throw new Error(
-                    `Virtual Try-On API error: ${response.status} ${response.statusText}. ${errorText}`
+                    `Virtual Try-On API error: ${statusCode}. ${responseText}`
                 );
             }
 
-            const responseData = (await response.json()) as APIResponse;
+            const responseData = JSON.parse(responseText) as APIResponse;
 
             if (!responseData.predictions || responseData.predictions.length === 0) {
                 throw new Error('Virtual Try-On API returned no predictions');
