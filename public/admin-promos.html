@@ -16,7 +16,7 @@
         .grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(180px, 1fr)); gap: 12px; }
         .err { color: #b91c1c; margin-top: 8px; }
         code { background: #f3f4f6; padding: 2px 6px; border-radius: 4px; font-size: 0.85rem; }
-        .login { max-width: 360px; }
+        .btn.secondary { background: #fff; color: #2da69a; border: 2px solid #38C1B7; }
     </style>
 </head>
 <body>
@@ -24,14 +24,19 @@
     <p>Superadmin only — create promo codes with try-on credits for CMS plugin testing.</p>
 
     <div id="loginBox" class="card login">
-        <h3>Login</h3>
-        <input type="email" id="email" placeholder="superadmin@zaha.ai" style="width:100%" /><br/>
+        <h3>Superadmin login</h3>
+        <p style="font-size:0.9rem;color:#6b7280;margin-bottom:12px">Use <strong>superadmin@zaha.ai</strong> — not a regular registered account.</p>
+        <input type="email" id="email" value="superadmin@zaha.ai" style="width:100%" /><br/>
         <input type="password" id="password" placeholder="Password" style="width:100%" /><br/>
         <button class="btn" id="loginBtn">Login</button>
         <div id="loginErr" class="err"></div>
     </div>
 
     <div id="adminPanel" style="display:none">
+        <div class="card" style="display:flex;justify-content:space-between;align-items:center">
+            <span id="whoami"></span>
+            <button class="btn secondary" id="logoutBtn" type="button" style="width:auto;background:#fff;color:#2da69a;border:2px solid #38C1B7">Logout</button>
+        </div>
         <div class="card">
             <h3>Create promo code</h3>
             <div class="grid">
@@ -94,6 +99,14 @@
             loadPromos();
         };
 
+        async function showAdmin(user) {
+            document.getElementById('loginBox').style.display = 'none';
+            document.getElementById('adminPanel').style.display = 'block';
+            document.getElementById('whoami').textContent = 'Logged in as ' + user.email + ' (' + user.role + ')';
+            await loadPromos();
+            await loadSites();
+        }
+
         document.getElementById('loginBtn').onclick = async () => {
             document.getElementById('loginErr').textContent = '';
             try {
@@ -103,12 +116,16 @@
                 })});
                 const me = await api('/api/auth/me');
                 if (!me.user || me.user.role !== 'superadmin') {
-                    throw new Error('This account is not a superadmin. Use superadmin@zaha.ai / admin123');
+                    await api('/api/auth/logout', { method: 'POST' });
+                    throw new Error('Not a superadmin. Use superadmin@zaha.ai / admin123');
                 }
-                document.getElementById('loginBox').style.display = 'none';
-                document.getElementById('adminPanel').style.display = 'block';
-                loadPromos(); loadSites();
+                await showAdmin(me.user);
             } catch (e) { document.getElementById('loginErr').textContent = e.message; }
+        };
+
+        document.getElementById('logoutBtn').onclick = async () => {
+            await api('/api/auth/logout', { method: 'POST' }).catch(() => {});
+            location.reload();
         };
 
         document.getElementById('createBtn').onclick = async () => {
@@ -131,11 +148,7 @@
         };
 
         api('/api/auth/me', { headers: { 'X-Silent-Session-Check': '1' } }).then(d => {
-            if (d.user && d.user.role === 'superadmin') {
-                document.getElementById('loginBox').style.display = 'none';
-                document.getElementById('adminPanel').style.display = 'block';
-                loadPromos(); loadSites();
-            }
+            if (d.user && d.user.role === 'superadmin') showAdmin(d.user);
         }).catch(() => {});
     </script>
 </body>
