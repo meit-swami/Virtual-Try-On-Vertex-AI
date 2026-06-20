@@ -76,14 +76,58 @@ const CONFIG = {
 } as const;
 
 const PATHS = {
-    SERVICE_ACCOUNT_KEY:
-        process.env.GOOGLE_APPLICATION_CREDENTIALS ||
-        (process.env.SERVICE_ACCOUNT_KEY_PATH
-            ? path.resolve(process.cwd(), process.env.SERVICE_ACCOUNT_KEY_PATH)
-            : path.resolve(process.cwd(), 'service-account-key.json')),
     UPLOADS: path.join(process.cwd(), 'uploads'),
     OUTPUTS: path.join(process.cwd(), 'outputs'),
 } as const;
+
+/** Resolved at startup — absolute path to service account JSON (if using file auth). */
+let resolvedServiceAccountKeyPath: string | null = null;
+/** Parsed credentials cached for GoogleAuth (avoids PM2 cwd / path issues). */
+let cachedServiceAccountCredentials: Record<string, unknown> | null = null;
+
+function resolveServiceAccountKeyPath(): string | null {
+    const candidates = [
+        process.env.GOOGLE_APPLICATION_CREDENTIALS,
+        process.env.SERVICE_ACCOUNT_KEY_PATH
+            ? path.resolve(process.cwd(), process.env.SERVICE_ACCOUNT_KEY_PATH)
+            : null,
+        path.resolve(process.cwd(), 'service-account-key.json'),
+        path.resolve(__dirname, '..', 'service-account-key.json'),
+    ].filter(Boolean) as string[];
+
+    for (const candidate of candidates) {
+        if (fs.existsSync(candidate)) return candidate;
+    }
+    return candidates[0] || null;
+}
+
+function loadServiceAccountCredentials(): Record<string, unknown> | null {
+    const jsonKey = process.env.GOOGLE_SERVICE_ACCOUNT_JSON;
+    if (jsonKey?.trim()) {
+        const credentials = JSON.parse(jsonKey) as Record<string, unknown>;
+        normalizePrivateKey(credentials);
+        return credentials;
+    }
+
+    const keyPath = resolveServiceAccountKeyPath();
+    if (!keyPath || !fs.existsSync(keyPath)) return null;
+
+    resolvedServiceAccountKeyPath = keyPath;
+    const credentials = JSON.parse(fs.readFileSync(keyPath, 'utf8')) as Record<string, unknown>;
+    normalizePrivateKey(credentials);
+    return credentials;
+}
+
+function normalizePrivateKey(credentials: Record<string, unknown>): void {
+    const pk = credentials.private_key;
+    if (typeof pk === 'string' && pk.includes('\\n')) {
+        credentials.private_key = pk.replace(/\\n/g, '\n');
+    }
+}
+
+async function sleep(ms: number): Promise<void> {
+    return new Promise((resolve) => setTimeout(resolve, ms));
+}
 
 const IMAGE_EXTENSIONS = ['.jpg', '.jpeg', '.png', '.gif', '.webp'] as const;
 
@@ -143,16 +187,45 @@ class FileUtils {
 }
 
 function getGoogleAuthOptions(): { keyFilename?: string; credentials?: object } {
-    const jsonKey = process.env.GOOGLE_SERVICE_ACCOUNT_JSON;
-    if (jsonKey && jsonKey.trim()) {
+    if (cachedServiceAccountCredentials) {
+        return { credentials: cachedServiceAccountCredentials };
+    }
+    if (resolvedServiceAccountKeyPath) {
+        return { keyFilename: resolvedServiceAccountKeyPath };
+    }
+    throw new Error('Google service account credentials are not configured.');
+}
+
+async function fetchGoogleAccessToken(): Promise<string> {
+    const auth = new GoogleAuth({
+        ...getGoogleAuthOptions(),
+        scopes: ['https://www.googleapis.com/auth/cloud-platform'],
+    });
+    const client = await auth.getClient();
+    const accessToken = await client.getAccessToken();
+    if (!accessToken.token) {
+        throw new Error('Failed to obtain access token');
+    }
+    return accessToken.token;
+}
+
+async function fetchGoogleAccessTokenWithRetry(maxAttempts = 4): Promise<string> {
+    let lastError: Error | undefined;
+    for (let attempt = 1; attempt <= maxAttempts; attempt++) {
         try {
-            const credentials = JSON.parse(jsonKey) as object;
-            return { credentials };
-        } catch {
-            throw new Error('GOOGLE_SERVICE_ACCOUNT_JSON is set but is not valid JSON.');
+            return await fetchGoogleAccessToken();
+        } catch (e: unknown) {
+            lastError = e as Error;
+            const msg = lastError.message || String(e);
+            const retryable =
+                /premature close|econnreset|etimedout|socket hang up|fetch failed|network/i.test(msg);
+            if (!retryable || attempt === maxAttempts) break;
+            const delayMs = 1000 * attempt;
+            console.warn(`Google token fetch attempt ${attempt} failed (${msg}). Retrying in ${delayMs}ms…`);
+            await sleep(delayMs);
         }
     }
-    return { keyFilename: PATHS.SERVICE_ACCOUNT_KEY };
+    throw lastError ?? new Error('Failed to obtain Google access token');
 }
 
 class VirtualTryOnService {
@@ -164,18 +237,12 @@ class VirtualTryOnService {
     }
 
     private static async getAccessToken(): Promise<string> {
-        const auth = new GoogleAuth({
-            ...getGoogleAuthOptions(),
-            scopes: ['https://www.googleapis.com/auth/cloud-platform'],
-        });
-        const client = await auth.getClient();
-        const accessToken = await client.getAccessToken();
+        return fetchGoogleAccessTokenWithRetry();
+    }
 
-        if (!accessToken.token) {
-            throw new Error('Failed to obtain access token');
-        }
-
-        return accessToken.token;
+    /** Pre-fetch token at startup so first try-on is not blocked by cold auth. */
+    static async warmUpAuth(): Promise<void> {
+        await fetchGoogleAccessTokenWithRetry();
     }
 
     static async generateVirtualTryOn(
@@ -316,23 +383,18 @@ function initializeApp(): void {
     FileUtils.ensureDirectoryExists(PATHS.UPLOADS);
     FileUtils.ensureDirectoryExists(PATHS.OUTPUTS);
 
-    // Setup authentication: use env JSON (e.g. Render) or key file (local)
-    const jsonKey = process.env.GOOGLE_SERVICE_ACCOUNT_JSON;
-    if (jsonKey && jsonKey.trim()) {
-        try {
-            JSON.parse(jsonKey);
-        } catch {
-            throw new Error('GOOGLE_SERVICE_ACCOUNT_JSON is set but is not valid JSON.');
-        }
-        return;
+    try {
+        cachedServiceAccountCredentials = loadServiceAccountCredentials();
+    } catch (e: unknown) {
+        throw new Error(`Invalid GOOGLE_SERVICE_ACCOUNT_JSON or service account key file: ${(e as Error).message}`);
     }
-    const keyPath = PATHS.SERVICE_ACCOUNT_KEY;
-    if (!keyPath || !fs.existsSync(keyPath)) {
+
+    if (!cachedServiceAccountCredentials) {
         const msg = [
             'Service account key file not found. Vertex AI requires a Google Cloud service account key.',
             '',
             'Fix by doing ONE of the following:',
-            '  1. (Production e.g. Render) Set env var GOOGLE_SERVICE_ACCOUNT_JSON to the full JSON key content.',
+            '  1. (Production e.g. EC2/Render) Set env var GOOGLE_SERVICE_ACCOUNT_JSON to the full JSON key content.',
             '  2. (Local) Place your key file at: ' + path.resolve(process.cwd(), 'service-account-key.json'),
             '  3. Set SERVICE_ACCOUNT_KEY_PATH in .env, or GOOGLE_APPLICATION_CREDENTIALS to the key file path.',
             '',
@@ -340,9 +402,14 @@ function initializeApp(): void {
         ].join('\n');
         throw new Error(msg);
     }
-    if (!process.env.GOOGLE_APPLICATION_CREDENTIALS) {
-        process.env.GOOGLE_APPLICATION_CREDENTIALS = keyPath;
+
+    if (!process.env.GOOGLE_APPLICATION_CREDENTIALS && resolvedServiceAccountKeyPath) {
+        process.env.GOOGLE_APPLICATION_CREDENTIALS = resolvedServiceAccountKeyPath;
     }
+
+    const email = cachedServiceAccountCredentials.client_email;
+    const project = cachedServiceAccountCredentials.project_id;
+    console.log(`🔑 GCP auth: ${typeof email === 'string' ? email : 'service account'} (project: ${project ?? CONFIG.PROJECT_ID ?? 'unknown'})`);
 }
 
 // ============================================================================
@@ -907,6 +974,28 @@ registerPluginRoutes(app, {
     downloadImageToFile,
 });
 
+app.get('/api/health/gcp-auth', async (_req: Request, res: Response) => {
+    try {
+        const token = await fetchGoogleAccessTokenWithRetry();
+        res.json({
+            ok: true,
+            projectId: CONFIG.PROJECT_ID,
+            location: CONFIG.LOCATION,
+            serviceAccount: cachedServiceAccountCredentials?.client_email ?? null,
+            tokenPreview: token.slice(0, 12) + '…',
+        });
+    } catch (e: unknown) {
+        const err = e as Error;
+        res.status(503).json({
+            ok: false,
+            error: err.message,
+            hint:
+                'EC2 must reach https://oauth2.googleapis.com over HTTPS (port 443). ' +
+                'Verify service-account-key.json on the server and security group outbound rules.',
+        });
+    }
+});
+
 // ============================================================================
 // Server Startup
 // ============================================================================
@@ -940,6 +1029,14 @@ app.listen(CONFIG.PORT, async () => {
     console.log(`📁 Uploads directory: ${PATHS.UPLOADS}`);
     console.log(`📁 Outputs directory: ${PATHS.OUTPUTS}`);
     console.log(process.env.DATABASE_URL ? '🔐 Sessions: PostgreSQL (persistent)' : '⚠️ Sessions: in-memory (set DATABASE_URL on Render for persistent login)');
+    try {
+        await VirtualTryOnService.warmUpAuth();
+        console.log('✅ Google Cloud auth OK (Vertex AI token obtained)');
+    } catch (e: unknown) {
+        console.error('❌ Google Cloud auth failed at startup:', (e as Error).message);
+        console.error('   Try-on will fail until EC2 can reach https://oauth2.googleapis.com and the service account key is valid.');
+        console.error('   Diagnostic: GET /api/health/gcp-auth');
+    }
     await seedSuperadminIfNeeded();
     try {
         await runPluginMigrations();
