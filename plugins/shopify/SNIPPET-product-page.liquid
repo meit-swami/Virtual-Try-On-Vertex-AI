@@ -1,0 +1,17 @@
+<!-- ZAHA Virtual Try-On — Manual Shopify Snippet -->
+<!-- Paste in theme product template (e.g. sections/main-product.liquid) after Add to Cart -->
+
+<div id="zaha-try-on-shopify"></div>
+<script src="YOUR_ZAHA_API_URL/plugin.js"></script>
+<script>
+  document.addEventListener('DOMContentLoaded', function () {
+    ZahaTryOn.init({
+      apiUrl: 'YOUR_ZAHA_API_URL',
+      apiKey: 'YOUR_API_KEY',
+      productUrl: '{{ product.url | absolute_url }}',
+      productImage: '{{ product.featured_image | image_url: width: 800 }}',
+      buttonText: '✨ Virtual Try-On',
+      target: '#zaha-try-on-shopify'
+    });
+  });
+</script>

@@ -1,0 +1,137 @@
+<!doctype html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>ZAHA — Promo Code Admin</title>
+    <style>
+        body { font-family: system-ui, sans-serif; max-width: 960px; margin: 0 auto; padding: 24px; background: #f9fafb; color: #1f2937; }
+        h1 { color: #2da69a; }
+        .card { background: #fff; border: 1px solid #e5e7eb; border-radius: 12px; padding: 20px; margin: 16px 0; }
+        table { width: 100%; border-collapse: collapse; font-size: 0.9rem; }
+        th, td { text-align: left; padding: 10px; border-bottom: 1px solid #e5e7eb; }
+        input, select { padding: 8px; border: 1px solid #d1d5db; border-radius: 6px; margin: 4px 0; }
+        .btn { padding: 10px 16px; background: #38C1B7; color: #fff; border: none; border-radius: 8px; cursor: pointer; font-weight: 600; }
+        .btn.danger { background: #ef4444; }
+        .grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(180px, 1fr)); gap: 12px; }
+        .err { color: #b91c1c; margin-top: 8px; }
+        code { background: #f3f4f6; padding: 2px 6px; border-radius: 4px; font-size: 0.85rem; }
+        .login { max-width: 360px; }
+    </style>
+</head>
+<body>
+    <h1>Promo Code Management</h1>
+    <p>Superadmin only — create promo codes with try-on credits for CMS plugin testing.</p>
+
+    <div id="loginBox" class="card login">
+        <h3>Login</h3>
+        <input type="email" id="email" placeholder="superadmin@zaha.ai" style="width:100%" /><br/>
+        <input type="password" id="password" placeholder="Password" style="width:100%" /><br/>
+        <button class="btn" id="loginBtn">Login</button>
+        <div id="loginErr" class="err"></div>
+    </div>
+
+    <div id="adminPanel" style="display:none">
+        <div class="card">
+            <h3>Create promo code</h3>
+            <div class="grid">
+                <div><label>Code</label><br/><input id="newCode" placeholder="MEITANSHI7992" /></div>
+                <div><label>Try-on credits</label><br/><input id="newCredits" type="number" value="20" min="1" /></div>
+                <div><label>Max redemptions</label><br/><input id="newMax" type="number" value="100" min="1" /></div>
+                <div><label>Notes</label><br/><input id="newNotes" placeholder="Test promo" /></div>
+            </div>
+            <button class="btn" id="createBtn" style="margin-top:12px">Create promo</button>
+        </div>
+
+        <div class="card">
+            <h3>Promo codes</h3>
+            <table><thead><tr><th>Code</th><th>Credits</th><th>Used / Max</th><th>Active</th><th>Notes</th><th></th></tr></thead><tbody id="promoTable"></tbody></table>
+        </div>
+
+        <div class="card">
+            <h3>Plugin sites & API keys</h3>
+            <p>Use the API key in WordPress / Shopify plugin settings.</p>
+            <div class="grid">
+                <div><label>Site name</label><br/><input id="siteName" placeholder="Indian Virasat" /></div>
+                <div><label>Platform</label><br/><select id="sitePlatform"><option>wordpress</option><option>shopify</option></select></div>
+                <div><label>Allowed domains</label><br/><input id="siteDomains" placeholder="indianvirasat.com" /></div>
+            </div>
+            <button class="btn" id="createSiteBtn" style="margin-top:12px">Create site + API key</button>
+            <table style="margin-top:16px"><thead><tr><th>Name</th><th>Platform</th><th>API Key</th><th>Domains</th></tr></thead><tbody id="siteTable"></tbody></table>
+        </div>
+    </div>
+
+    <script>
+        async function api(path, opts = {}) {
+            const res = await fetch(path, { credentials: 'include', ...opts, headers: { 'Content-Type': 'application/json', ...(opts.headers||{}) } });
+            const data = await res.json().catch(() => ({}));
+            if (!res.ok) throw new Error(data.error || res.statusText);
+            return data;
+        }
+
+        async function loadPromos() {
+            const { promos } = await api('/api/admin/promos');
+            document.getElementById('promoTable').innerHTML = promos.map(p => `
+                <tr>
+                    <td><code>${p.code}</code></td>
+                    <td>${p.try_on_credits}</td>
+                    <td>${p.times_redeemed} / ${p.max_redemptions}</td>
+                    <td>${p.is_active ? '✅' : '❌'}</td>
+                    <td>${p.notes || ''}</td>
+                    <td><button class="btn danger" onclick="deletePromo(${p.id})">Delete</button></td>
+                </tr>`).join('');
+        }
+
+        async function loadSites() {
+            const { sites } = await api('/api/admin/plugin-sites');
+            document.getElementById('siteTable').innerHTML = sites.map(s => `
+                <tr><td>${s.name}</td><td>${s.platform}</td><td><code>${s.api_key}</code></td><td>${s.allowed_domains||'—'}</td></tr>`).join('');
+        }
+
+        window.deletePromo = async (id) => {
+            if (!confirm('Delete this promo?')) return;
+            await api('/api/admin/promos/' + id, { method: 'DELETE' });
+            loadPromos();
+        };
+
+        document.getElementById('loginBtn').onclick = async () => {
+            try {
+                await api('/api/auth/login', { method: 'POST', body: JSON.stringify({
+                    email: document.getElementById('email').value,
+                    password: document.getElementById('password').value,
+                })});
+                document.getElementById('loginBox').style.display = 'none';
+                document.getElementById('adminPanel').style.display = 'block';
+                loadPromos(); loadSites();
+            } catch (e) { document.getElementById('loginErr').textContent = e.message; }
+        };
+
+        document.getElementById('createBtn').onclick = async () => {
+            await api('/api/admin/promos', { method: 'POST', body: JSON.stringify({
+                code: document.getElementById('newCode').value,
+                try_on_credits: +document.getElementById('newCredits').value,
+                max_redemptions: +document.getElementById('newMax').value,
+                notes: document.getElementById('newNotes').value,
+            })});
+            loadPromos();
+        };
+
+        document.getElementById('createSiteBtn').onclick = async () => {
+            await api('/api/admin/plugin-sites', { method: 'POST', body: JSON.stringify({
+                name: document.getElementById('siteName').value,
+                platform: document.getElementById('sitePlatform').value,
+                allowed_domains: document.getElementById('siteDomains').value,
+            })});
+            loadSites();
+        };
+
+        api('/api/auth/me', { headers: { 'X-Silent-Session-Check': '1' } }).then(d => {
+            if (d.user && d.user.role === 'superadmin') {
+                document.getElementById('loginBox').style.display = 'none';
+                document.getElementById('adminPanel').style.display = 'block';
+                loadPromos(); loadSites();
+            }
+        }).catch(() => {});
+    </script>
+</body>
+</html>

@@ -24,6 +24,9 @@ import {
     testConnection,
     type User,
 } from './db';
+import { registerPluginRoutes } from './plugin-routes';
+import { runPluginMigrations, seedDefaultPromoAndSite } from './plugin-db';
+import { prepareImageForVertexAI, cleanupPreparedImage, downloadAndPrepareProductImage, preferJpegProductUrl } from './image-utils';
 
 // Load environment variables
 dotenv.config();
@@ -183,57 +186,65 @@ class VirtualTryOnService {
         const apiEndpoint = this.getApiEndpoint();
         const accessToken = await this.getAccessToken();
 
-        const personImageBase64 = FileUtils.imageToBase64(personImagePath);
-        const productImageBase64 = FileUtils.imageToBase64(productImagePath);
+        const personPrepared = await prepareImageForVertexAI(personImagePath, 'Person image');
+        const productPrepared = await prepareImageForVertexAI(productImagePath, 'Product image');
 
-        const requestBody = {
-            instances: [
-                {
-                    personImage: {
-                        image: {
-                            bytesBase64Encoded: personImageBase64,
-                        },
-                    },
-                    productImages: [
-                        {
+        try {
+            const personImageBase64 = FileUtils.imageToBase64(personPrepared);
+            const productImageBase64 = FileUtils.imageToBase64(productPrepared);
+
+            const requestBody = {
+                instances: [
+                    {
+                        personImage: {
                             image: {
-                                bytesBase64Encoded: productImageBase64,
+                                bytesBase64Encoded: personImageBase64,
                             },
                         },
-                    ],
+                        productImages: [
+                            {
+                                image: {
+                                    bytesBase64Encoded: productImageBase64,
+                                },
+                            },
+                        ],
+                    },
+                ],
+                parameters: {
+                    sampleCount: Math.max(1, Math.min(4, sampleCount)),
                 },
-            ],
-            parameters: {
-                sampleCount: Math.max(1, Math.min(4, sampleCount)),
-            },
-        };
+            };
 
-        const response = await fetch(apiEndpoint, {
-            method: 'POST',
-            headers: {
-                Authorization: `Bearer ${accessToken}`,
-                'Content-Type': 'application/json; charset=utf-8',
-            },
-            body: JSON.stringify(requestBody),
-        });
+            const response = await fetch(apiEndpoint, {
+                method: 'POST',
+                headers: {
+                    Authorization: `Bearer ${accessToken}`,
+                    'Content-Type': 'application/json; charset=utf-8',
+                },
+                body: JSON.stringify(requestBody),
+            });
 
-        if (!response.ok) {
-            const errorText = await response.text();
-            throw new Error(
-                `Virtual Try-On API error: ${response.status} ${response.statusText}. ${errorText}`
-            );
+            if (!response.ok) {
+                const errorText = await response.text();
+                throw new Error(
+                    `Virtual Try-On API error: ${response.status} ${response.statusText}. ${errorText}`
+                );
+            }
+
+            const responseData = (await response.json()) as APIResponse;
+
+            if (!responseData.predictions || responseData.predictions.length === 0) {
+                throw new Error('Virtual Try-On API returned no predictions');
+            }
+
+            return responseData.predictions.map((pred) => ({
+                mimeType: pred.mimeType || 'image/png',
+                bytesBase64Encoded: pred.bytesBase64Encoded || '',
+            }));
+        } finally {
+            cleanupPreparedImage(personPrepared, personImagePath);
+            cleanupPreparedImage(productPrepared, productImagePath);
         }
-
-        const responseData = (await response.json()) as APIResponse;
-
-        if (!responseData.predictions || responseData.predictions.length === 0) {
-            throw new Error('Virtual Try-On API returned no predictions');
-        }
-
-        return responseData.predictions.map((pred) => ({
-            mimeType: pred.mimeType || 'image/png',
-            bytesBase64Encoded: pred.bytesBase64Encoded || '',
-        }));
     }
 }
 
@@ -394,6 +405,14 @@ app.use(async (req: Request, _res: Response, next: () => void) => {
 function requireAuth(req: Request, res: Response, next: () => void): void {
     if (!req.user) {
         res.status(401).json({ error: 'Login required' });
+        return;
+    }
+    next();
+}
+
+function requireSuperadmin(req: Request, res: Response, next: () => void): void {
+    if (!req.user || req.user.role !== 'superadmin') {
+        res.status(403).json({ error: 'Superadmin access required' });
         return;
     }
     next();
@@ -593,7 +612,7 @@ app.post(
             } else if (body.productImageUrl && typeof body.productImageUrl === 'string') {
                 productNewFilename = `product-${generationId}.jpg`;
                 productNewPath = path.join(PATHS.UPLOADS, productNewFilename);
-                await downloadImageToFile(body.productImageUrl, productNewPath);
+                await downloadAndPrepareProductImage(body.productImageUrl, PATHS.UPLOADS, generationId, downloadImageToFile);
             } else {
                 return res.status(400).json({ error: 'Product image (file or URL) is required' });
             }
@@ -778,7 +797,7 @@ app.post('/api/extract-product', async (req: Request, res: Response) => {
             return res.status(404).json({ error: 'Could not find product image on this page' });
         }
 
-        res.json({ productImageUrl });
+        res.json({ productImageUrl: preferJpegProductUrl(productImageUrl) });
     } catch (error: any) {
         console.error('Error extracting product:', error);
         res.status(500).json({ error: error.message || 'Failed to extract product image' });
@@ -866,6 +885,14 @@ app.delete('/api/results/:id', requireAuth, async (req: Request, res: Response) 
     }
 });
 
+registerPluginRoutes(app, {
+    upload,
+    paths: { uploads: PATHS.UPLOADS, outputs: PATHS.OUTPUTS },
+    generateTryOn: VirtualTryOnService.generateVirtualTryOn.bind(VirtualTryOnService),
+    requireSuperadmin,
+    downloadImageToFile,
+});
+
 // ============================================================================
 // Server Startup
 // ============================================================================
@@ -900,4 +927,12 @@ app.listen(CONFIG.PORT, async () => {
     console.log(`📁 Outputs directory: ${PATHS.OUTPUTS}`);
     console.log(process.env.DATABASE_URL ? '🔐 Sessions: PostgreSQL (persistent)' : '⚠️ Sessions: in-memory (set DATABASE_URL on Render for persistent login)');
     await seedSuperadminIfNeeded();
+    try {
+        await runPluginMigrations();
+        await seedDefaultPromoAndSite();
+        console.log('🧩 Plugin API ready at /api/plugin/* — embed at /embed.html');
+        console.log('🎛️  Promo admin at /admin-promos.html (superadmin login)');
+    } catch (e: unknown) {
+        console.warn('Plugin setup skipped:', (e as Error).message);
+    }
 });

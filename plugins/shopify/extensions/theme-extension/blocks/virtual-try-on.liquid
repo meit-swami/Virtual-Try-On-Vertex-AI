@@ -1,0 +1,51 @@
+{% comment %}
+  ZAHA Virtual Try-On — Shopify Theme Block
+  Add via Theme Editor → Product page → Add block → "ZAHA Virtual Try-On"
+{% endcomment %}
+
+<div id="zaha-try-on-{{ block.id }}" class="zaha-try-on-block" style="margin: 16px 0;"></div>
+
+<script src="{{ block.settings.api_url | strip }}/plugin.js" defer></script>
+<script defer>
+  document.addEventListener('DOMContentLoaded', function () {
+    if (!window.ZahaTryOn) return;
+    ZahaTryOn.init({
+      apiUrl: {{ block.settings.api_url | json }},
+      apiKey: {{ block.settings.api_key | json }},
+      productUrl: {{ product.url | absolute_url | json }},
+      productImage: {{ product.featured_image | image_url: width: 800 | json }},
+      buttonText: {{ block.settings.button_text | json }},
+      target: '#zaha-try-on-{{ block.id }}',
+      position: 'before'
+    });
+  });
+</script>
+
+{% schema %}
+{
+  "name": "ZAHA Virtual Try-On",
+  "target": "section",
+  "templates": ["product"],
+  "settings": [
+    {
+      "type": "text",
+      "id": "api_url",
+      "label": "ZAHA API URL",
+      "default": "http://localhost:3000",
+      "info": "Your ZAHA server URL"
+    },
+    {
+      "type": "text",
+      "id": "api_key",
+      "label": "API Key",
+      "info": "From ZAHA admin → Promo Code Management"
+    },
+    {
+      "type": "text",
+      "id": "button_text",
+      "label": "Button text",
+      "default": "✨ Virtual Try-On"
+    }
+  ]
+}
+{% endschema %}

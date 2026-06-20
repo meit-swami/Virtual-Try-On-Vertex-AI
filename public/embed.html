@@ -1,0 +1,179 @@
+<!doctype html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>ZAHA Virtual Try-On</title>
+    <style>
+        :root { --accent: #38C1B7; --accent-dark: #2da69a; --err: #fee2e2; --err-text: #b91c1c; }
+        * { box-sizing: border-box; margin: 0; padding: 0; }
+        body { font-family: system-ui, sans-serif; background: #f9fafb; padding: 16px; color: #1f2937; }
+        h1 { font-size: 1.4rem; color: var(--accent-dark); margin-bottom: 4px; }
+        .sub { color: #6b7280; font-size: 0.9rem; margin-bottom: 16px; }
+        .card { background: #fff; border: 1px solid #e5e7eb; border-radius: 12px; padding: 16px; margin-bottom: 12px; }
+        label { display: block; font-weight: 600; margin-bottom: 6px; font-size: 0.85rem; }
+        input[type=text], input[type=email], input[type=file] { width: 100%; padding: 10px; border: 1px solid #d1d5db; border-radius: 8px; }
+        .row { display: grid; grid-template-columns: 1fr 1fr; gap: 12px; }
+        @media (max-width: 640px) { .row { grid-template-columns: 1fr; } }
+        .preview { width: 100%; max-height: 200px; object-fit: contain; border-radius: 8px; background: #f3f4f6; margin-top: 8px; }
+        .drop { border: 2px dashed #cbd5e1; border-radius: 10px; padding: 20px; text-align: center; cursor: pointer; color: #64748b; }
+        .drop:hover { border-color: var(--accent); color: var(--accent-dark); }
+        .btn { width: 100%; padding: 14px; border: none; border-radius: 10px; background: var(--accent); color: #fff; font-weight: 700; cursor: pointer; font-size: 1rem; margin-top: 8px; }
+        .btn:disabled { opacity: 0.5; cursor: not-allowed; }
+        .btn.secondary { background: #fff; color: var(--accent-dark); border: 2px solid var(--accent); }
+        .credits { background: #ecfdf5; color: #047857; padding: 8px 12px; border-radius: 8px; font-size: 0.9rem; margin-bottom: 12px; display: none; }
+        .err { background: var(--err); color: var(--err-text); padding: 10px; border-radius: 8px; margin-top: 10px; font-size: 0.85rem; display: none; white-space: pre-wrap; }
+        .results { display: grid; grid-template-columns: repeat(auto-fill, minmax(140px, 1fr)); gap: 10px; margin-top: 12px; }
+        .results img { width: 100%; border-radius: 8px; border: 1px solid #e5e7eb; }
+        .hidden { display: none !important; }
+        .step-title { font-size: 0.75rem; text-transform: uppercase; letter-spacing: 0.05em; color: #9ca3af; margin-bottom: 8px; }
+    </style>
+</head>
+<body>
+    <h1>Virtual Try-On</h1>
+    <p class="sub">Upload your photo and see how this product looks on you.</p>
+
+    <div id="promoStep" class="card">
+        <div class="step-title">Step 1 — Enter promo code</div>
+        <label for="promoCode">Promo code</label>
+        <input type="text" id="promoCode" placeholder="e.g. MEITANSHI7992" />
+        <button class="btn secondary" id="redeemBtn" type="button">Redeem & get credits</button>
+    </div>
+
+    <div id="tryOnStep" class="hidden">
+        <div id="creditsBar" class="credits"></div>
+
+        <div class="card">
+            <div class="step-title">Step 2 — Your photo</div>
+            <div class="drop" id="personDrop">Click or drag your photo here<br><small>JPG, PNG, WEBP (max 10MB)</small></div>
+            <input type="file" id="personFile" accept="image/*" class="hidden" />
+            <img id="personPreview" class="preview hidden" alt="You" />
+        </div>
+
+        <div class="card">
+            <div class="step-title">Step 3 — Product</div>
+            <img id="productPreview" class="preview" alt="Product" />
+        </div>
+
+        <button class="btn" id="generateBtn" type="button" disabled>Generate Virtual Try-On</button>
+    </div>
+
+    <div id="errBox" class="err"></div>
+    <div id="results" class="results"></div>
+
+    <script>
+        const params = new URLSearchParams(location.search);
+        const API_BASE = params.get('api') || location.origin;
+        const API_KEY = params.get('key') || '';
+        const PRODUCT_URL = params.get('productUrl') || params.get('product') || '';
+        const PRODUCT_IMAGE = params.get('productImage') || '';
+
+        let sessionToken = localStorage.getItem('zaha_session_' + API_KEY) || '';
+        let credits = 0;
+        let personFile = null;
+        let productImageUrl = PRODUCT_IMAGE;
+
+        const $ = (id) => document.getElementById(id);
+        const showErr = (msg) => { $('errBox').style.display = 'block'; $('errBox').textContent = msg; };
+        const hideErr = () => { $('errBox').style.display = 'none'; };
+
+        async function api(path, opts = {}) {
+            const headers = { 'X-Zaha-Api-Key': API_KEY, ...(opts.headers || {}) };
+            if (sessionToken) headers['X-Zaha-Session'] = sessionToken;
+            const res = await fetch(API_BASE + path, { ...opts, headers });
+            const data = await res.json().catch(() => ({}));
+            if (!res.ok) throw new Error(data.error || res.statusText);
+            return data;
+        }
+
+        function updateUI() {
+            if (sessionToken && credits > 0) {
+                $('promoStep').classList.add('hidden');
+                $('tryOnStep').classList.remove('hidden');
+                $('creditsBar').style.display = 'block';
+                $('creditsBar').textContent = credits + ' try-on' + (credits === 1 ? '' : 's') + ' remaining';
+                $('generateBtn').disabled = !personFile || !productImageUrl;
+            }
+        }
+
+        async function loadProduct() {
+            if (productImageUrl) {
+                $('productPreview').src = productImageUrl;
+                return;
+            }
+            if (!PRODUCT_URL) return;
+            try {
+                const data = await api('/api/plugin/extract-product', {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({ url: PRODUCT_URL }),
+                });
+                productImageUrl = data.productImageUrl;
+                $('productPreview').src = productImageUrl;
+            } catch (e) {
+                showErr('Could not load product image: ' + e.message);
+            }
+        }
+
+        async function checkCredits() {
+            if (!sessionToken || !API_KEY) return;
+            try {
+                const data = await api('/api/plugin/credits');
+                credits = data.creditsRemaining;
+                updateUI();
+            } catch { sessionToken = ''; localStorage.removeItem('zaha_session_' + API_KEY); }
+        }
+
+        $('redeemBtn').onclick = async () => {
+            hideErr();
+            const code = $('promoCode').value.trim();
+            if (!code) return showErr('Enter a promo code');
+            if (!API_KEY) return showErr('Missing API key. Add ?key=YOUR_KEY to the embed URL.');
+            try {
+                const data = await api('/api/plugin/redeem-promo', {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({ code }),
+                });
+                sessionToken = data.sessionToken;
+                credits = data.creditsRemaining;
+                localStorage.setItem('zaha_session_' + API_KEY, sessionToken);
+                updateUI();
+            } catch (e) { showErr(e.message); }
+        };
+
+        $('personDrop').onclick = () => $('personFile').click();
+        $('personFile').onchange = (e) => {
+            personFile = e.target.files[0];
+            if (!personFile) return;
+            $('personPreview').src = URL.createObjectURL(personFile);
+            $('personPreview').classList.remove('hidden');
+            $('generateBtn').disabled = !productImageUrl;
+        };
+
+        $('generateBtn').onclick = async () => {
+            hideErr();
+            $('generateBtn').disabled = true;
+            $('generateBtn').textContent = 'Generating… (30–60 sec)';
+            try {
+                const fd = new FormData();
+                fd.append('personImage', personFile);
+                fd.append('productImageUrl', productImageUrl);
+                const data = await api('/api/plugin/try-on', { method: 'POST', body: fd });
+                credits = data.creditsRemaining;
+                $('creditsBar').textContent = credits + ' try-on' + (credits === 1 ? '' : 's') + ' remaining';
+                $('results').innerHTML = data.resultImages.map((u) =>
+                    `<img src="${API_BASE}${u}" alt="Try-on result" />`
+                ).join('');
+            } catch (e) { showErr(e.message); }
+            finally {
+                $('generateBtn').disabled = !personFile || !productImageUrl || credits <= 0;
+                $('generateBtn').textContent = 'Generate Virtual Try-On';
+            }
+        };
+
+        if (!API_KEY) showErr('Configure API key: /embed.html?key=YOUR_KEY&productUrl=PRODUCT_PAGE_URL');
+        else { checkCredits(); loadProduct(); }
+    </script>
+</body>
+</html>
