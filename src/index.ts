@@ -1,5 +1,5 @@
 // Web server for Virtual Try-On interface
-import dotenv from 'dotenv';
+import './env';
 import express, { Request, Response } from 'express';
 import session from 'express-session';
 import connectPgSimple from 'connect-pg-simple';
@@ -27,9 +27,6 @@ import { registerPluginRoutes } from './plugin-routes';
 import { runPluginMigrations, seedDefaultPromoAndSite } from './plugin-db';
 import { prepareImageForVertexAI, cleanupPreparedImage, downloadAndPrepareProductImage, preferJpegProductUrl, normalizeImageUrl } from './image-utils';
 import { getServiceAccountAccessTokenWithRetry, httpsRequest } from './gcp-auth';
-
-// Load environment variables
-dotenv.config();
 
 // ============================================================================
 // Types & Interfaces
@@ -994,6 +991,9 @@ app.listen(CONFIG.PORT, async () => {
     console.log(`📁 Uploads directory: ${PATHS.UPLOADS}`);
     console.log(`📁 Outputs directory: ${PATHS.OUTPUTS}`);
     console.log(process.env.DATABASE_URL ? '🔐 Sessions: PostgreSQL (persistent)' : '⚠️ Sessions: in-memory (set DATABASE_URL on Render for persistent login)');
+    if (!process.env.DATABASE_URL) {
+        console.warn('⚠️  DATABASE_URL is not set — plugin promo/credits will not work.');
+    }
     try {
         await VirtualTryOnService.warmUpAuth();
         console.log('✅ Google Cloud auth OK (Vertex AI token obtained)');

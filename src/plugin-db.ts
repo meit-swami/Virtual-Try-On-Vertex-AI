@@ -1,7 +1,8 @@
+import './env';
 import crypto from 'crypto';
-import { pool } from './db';
+import { pool, isPostgres } from './db';
 
-const usePostgres = !!process.env.DATABASE_URL;
+const usePostgres = isPostgres;
 
 function toPgParams(sql: string): string {
     let n = 0;

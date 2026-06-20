@@ -1,7 +1,9 @@
+import './env';
 import mysql from 'mysql2/promise';
 import pg from 'pg';
 
-const usePostgres = !!process.env.DATABASE_URL;
+export const isPostgres = !!process.env.DATABASE_URL;
+const usePostgres = isPostgres;
 
 // ----------------------------------------------------------------------------
 // MySQL pool (when DATABASE_URL is not set)
