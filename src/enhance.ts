@@ -21,7 +21,7 @@
 
 import fs from 'fs';
 import sharp from 'sharp';
-import https from 'https';
+import { runReplicate, downloadBuffer, toDataUri } from './replicate';
 
 // 4K UHD long-edge target. 3840×2160 is "4K"; we scale the long edge to 3840
 // and let the short edge follow the source aspect ratio.
@@ -93,119 +93,21 @@ async function upscaleWithSharp(
  * Returns a PNG buffer, or throws so the caller can fall back to sharp.
  */
 async function upscaleWithReplicate(inputBuffer: Buffer): Promise<Buffer> {
-    const token = process.env.REPLICATE_API_TOKEN;
-    if (!token) throw new Error('REPLICATE_API_TOKEN not set');
-
     // Real-ESRGAN with face enhancement. Version pinned via env so upgrades are
     // an explicit, reviewable change rather than a silent one.
     const version =
         process.env.REPLICATE_UPSCALE_VERSION ||
         'f121d640bd286e1fdc67f9799164c1d5be36ff74576ee11c803ae5b665dd46aa'; // nightmareai/real-esrgan
 
-    const dataUri = `data:image/png;base64,${inputBuffer.toString('base64')}`;
-
-    const prediction = await replicateRequest('POST', '/v1/predictions', token, {
-        version,
-        input: {
-            image: dataUri,
-            scale: 4,
-            face_enhance: true,
-        },
+    const output = await runReplicate(version, {
+        image: toDataUri(inputBuffer),
+        scale: 4,
+        face_enhance: true,
     });
 
-    // Poll until the prediction finishes.
-    let status = prediction.status as string;
-    let getUrl = prediction?.urls?.get as string | undefined;
-    let output = prediction.output as string | undefined;
-    let attempts = 0;
-    const maxAttempts = 60; // ~2 minutes at 2s interval
-
-    while ((status === 'starting' || status === 'processing') && getUrl && attempts < maxAttempts) {
-        await new Promise((r) => setTimeout(r, 2000));
-        const poll = await replicateGetUrl(getUrl, token);
-        status = poll.status;
-        output = poll.output;
-        attempts++;
-    }
-
-    if (status !== 'succeeded' || !output) {
-        throw new Error(`Replicate super-res did not succeed (status=${status})`);
-    }
-
-    // Output is a URL to the upscaled image; download it.
-    return downloadBuffer(output);
-}
-
-function replicateRequest(
-    method: string,
-    path: string,
-    token: string,
-    body: unknown
-): Promise<any> {
-    const payload = JSON.stringify(body);
-    return new Promise((resolve, reject) => {
-        const req = https.request(
-            {
-                hostname: 'api.replicate.com',
-                path,
-                method,
-                headers: {
-                    Authorization: `Bearer ${token}`,
-                    'Content-Type': 'application/json',
-                    'Content-Length': String(Buffer.byteLength(payload)),
-                },
-            },
-            (res) => {
-                const chunks: Buffer[] = [];
-                res.on('data', (c) => chunks.push(c));
-                res.on('end', () => {
-                    try {
-                        resolve(JSON.parse(Buffer.concat(chunks).toString('utf8')));
-                    } catch (e) {
-                        reject(e);
-                    }
-                });
-            }
-        );
-        req.on('error', reject);
-        req.setTimeout(30_000, () => { req.destroy(); reject(new Error('Replicate request timeout')); });
-        req.write(payload);
-        req.end();
-    });
-}
-
-function replicateGetUrl(url: string, token: string): Promise<any> {
-    return new Promise((resolve, reject) => {
-        const u = new URL(url);
-        const req = https.request(
-            { hostname: u.hostname, path: u.pathname + u.search, method: 'GET', headers: { Authorization: `Bearer ${token}` } },
-            (res) => {
-                const chunks: Buffer[] = [];
-                res.on('data', (c) => chunks.push(c));
-                res.on('end', () => {
-                    try { resolve(JSON.parse(Buffer.concat(chunks).toString('utf8'))); }
-                    catch (e) { reject(e); }
-                });
-            }
-        );
-        req.on('error', reject);
-        req.setTimeout(30_000, () => { req.destroy(); reject(new Error('Replicate poll timeout')); });
-        req.end();
-    });
-}
-
-function downloadBuffer(url: string): Promise<Buffer> {
-    return new Promise((resolve, reject) => {
-        https.get(url, (res) => {
-            if (res.statusCode && res.statusCode >= 400) {
-                reject(new Error(`Download failed (HTTP ${res.statusCode})`));
-                return;
-            }
-            const chunks: Buffer[] = [];
-            res.on('data', (c) => chunks.push(c));
-            res.on('end', () => resolve(Buffer.concat(chunks)));
-        }).on('error', reject);
-    });
+    const url = Array.isArray(output) ? output[0] : output;
+    if (!url) throw new Error('Replicate super-res returned no output');
+    return downloadBuffer(url);
 }
 
 // ---------------------------------------------------------------------------

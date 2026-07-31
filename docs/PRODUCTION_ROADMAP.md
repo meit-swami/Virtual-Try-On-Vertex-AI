@@ -34,18 +34,27 @@ Everything below is backend-shared by both plugins, so it comes first.
   - Production env validation warnings at startup.
 - **Secret hygiene**: `.env` untracked from git (done earlier).
 
-## Phase 2 — Fidelity pipeline: background & face lock-in
+## Phase 2 — Fidelity pipeline: background & face lock-in ✅ (this PR)
 
-Raise fidelity from "visually identical" toward "background/face pixel-preserved".
+Raise fidelity from "visually identical" toward "background/face preserved".
 
-- Clothing-region **segmentation** provider (e.g. SAM / a Vertex or Replicate
-  segmentation model) to get a garment mask.
-- **Composite** the generated garment region back onto the *original* photo so
-  the real background is preserved pixel-for-pixel.
-- **Face restore / paste-back** (e.g. GFPGAN/CodeFormer) to eliminate identity
-  and expression drift.
-- Quality gate: auto-reject/regenerate outputs that drift too far from the input
-  (face-embedding similarity + background diff thresholds).
+- **Shared Replicate client** (`src/replicate.ts`) — run/poll/download; used by
+  all provider-backed stages. `enhance.ts` refactored onto it.
+- **Stage B — background lock-in** (`src/fidelity.ts`): segment the person out
+  of the generated result and composite them back onto the **original photo's
+  background**, so the real background is preserved. Sharp compositing mechanics
+  unit-tested.
+- **Stage C — face restoration** (`src/fidelity.ts`): CodeFormer over the result
+  to counter identity/expression drift (`FACE_RESTORE_FIDELITY` tunable).
+- Pipeline order wired in `save-result.ts`: **bg-lock → face-restore → 4K**.
+- Both stages require `REPLICATE_API_TOKEN`, are OFF by default, and degrade
+  gracefully (each failure falls back to the previous best image).
+
+### Phase 2 follow-ups (later)
+- Clothing-region masking (SAM) for garment-only replacement as an alternative
+  to full-person compositing.
+- Quality gate: auto-reject/regenerate outputs that drift too far (face-embedding
+  similarity + background diff thresholds).
 
 ## Phase 3 — Shopify App Store app
 

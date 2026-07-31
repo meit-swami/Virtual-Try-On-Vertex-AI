@@ -1,10 +1,14 @@
-// Shared helper: persist a Vertex AI prediction to disk, optionally running the
-// 4K enhancement pipeline. Used by both the main app route and plugin routes so
-// the output behaviour is identical everywhere.
+// Shared helper: persist a Vertex AI prediction to disk, running the fidelity
+// stages (background lock-in, face restore) and 4K enhancement. Used by both
+// the main app route and plugin routes so behaviour is identical everywhere.
+//
+// Pipeline order per image:
+//   raw generated → [Stage B background lock] → [Stage C face restore] → [Stage A 4K] → saved
 
 import fs from 'fs';
 import path from 'path';
 import { enhanceToHighRes } from './enhance';
+import { applyFidelity } from './fidelity';
 
 interface Prediction {
     mimeType: string;
@@ -19,55 +23,84 @@ function envFlag(name: string, def = false): boolean {
 
 /**
  * Save all predictions for a generation, returning the public `/outputs/...`
- * URLs. When UPSCALE_ENABLED (default true), each image is enhanced to 4K.
+ * URLs.
+ *
+ * @param originalPersonPath  Path to the user's uploaded person photo, needed
+ *                            by the background lock-in stage. Optional; if
+ *                            omitted, background lock is skipped.
  */
 export async function savePredictions(
     predictions: Prediction[],
     outputsDir: string,
-    generationId: number
+    generationId: number,
+    originalPersonPath?: string
 ): Promise<string[]> {
     const enhance = envFlag('UPSCALE_ENABLED', true);
+    const runFidelity =
+        !!originalPersonPath &&
+        (envFlag('BACKGROUND_LOCK_ENABLED', false) || envFlag('FACE_RESTORE_ENABLED', false));
     const savedImages: string[] = [];
 
     for (let i = 0; i < predictions.length; i++) {
         const prediction = predictions[i];
         const rawExt = prediction.mimeType.split('/')[1] || 'png';
-        // Suffix multi-sample results so they never overwrite each other.
         const suffix = predictions.length > 1 ? `-${i + 1}` : '';
         const imageBuffer = Buffer.from(prediction.bytesBase64Encoded, 'base64');
 
-        if (!enhance) {
+        // Fast path: nothing to do — write raw and move on.
+        if (!enhance && !runFidelity) {
             const outputFilename = `result-${generationId}${suffix}.${rawExt}`;
             fs.writeFileSync(path.join(outputsDir, outputFilename), imageBuffer);
             savedImages.push(`/outputs/${outputFilename}`);
             continue;
         }
 
-        // Write the raw model output to a temp file, enhance to a 4K PNG.
         const rawPath = path.join(outputsDir, `result-${generationId}${suffix}-raw.${rawExt}`);
         fs.writeFileSync(rawPath, imageBuffer);
-        const outputFilename = `result-${generationId}${suffix}.png`;
-        const outputPath = path.join(outputsDir, outputFilename);
+
+        // Track the "current best" file through the stages so failures can fall back.
+        let currentPath = rawPath;
+        const tempFiles: string[] = [rawPath];
 
         try {
-            const result = await enhanceToHighRes(rawPath, outputPath, { format: 'png' });
-            console.log(
-                `[enhance] ${outputFilename}: ${result.width}×${result.height} via ${result.upscaler}` +
-                (result.fellBack ? ' (fell back to sharp)' : '')
-            );
+            // Stage B + C — fidelity (background lock-in, face restore).
+            if (runFidelity) {
+                const fidelityPath = path.join(outputsDir, `result-${generationId}${suffix}-fidelity.png`);
+                const { stagesApplied } = await applyFidelity(currentPath, originalPersonPath!, fidelityPath);
+                if (stagesApplied.length > 0) {
+                    currentPath = fidelityPath;
+                    tempFiles.push(fidelityPath);
+                    console.log(`[fidelity] ${path.basename(fidelityPath)}: applied ${stagesApplied.join(', ')}`);
+                }
+            }
+
+            // Stage A — 4K enhancement (final output).
+            const outputFilename = `result-${generationId}${suffix}.png`;
+            const outputPath = path.join(outputsDir, outputFilename);
+
+            if (enhance) {
+                const result = await enhanceToHighRes(currentPath, outputPath, { format: 'png' });
+                console.log(
+                    `[enhance] ${outputFilename}: ${result.width}×${result.height} via ${result.upscaler}` +
+                    (result.fellBack ? ' (fell back to sharp)' : '')
+                );
+            } else {
+                // Fidelity ran but 4K disabled — promote the fidelity result.
+                fs.copyFileSync(currentPath, outputPath);
+            }
+            savedImages.push(`/outputs/${outputFilename}`);
         } catch (e) {
-            // If enhancement fails for any reason, fall back to the raw image so
-            // the customer still gets a result.
-            console.warn(`[enhance] failed for ${outputFilename}, using raw output:`, (e as Error).message);
+            // Any stage failed — fall back to the raw generated image.
+            console.warn(`[save] pipeline failed for generation ${generationId}${suffix}, using raw:`, (e as Error).message);
             const fallbackName = `result-${generationId}${suffix}.${rawExt}`;
             fs.copyFileSync(rawPath, path.join(outputsDir, fallbackName));
             savedImages.push(`/outputs/${fallbackName}`);
-            try { fs.unlinkSync(rawPath); } catch { /* ignore */ }
-            continue;
+        } finally {
+            // Clean up intermediates (keep only the final saved output).
+            for (const f of tempFiles) {
+                try { if (fs.existsSync(f)) fs.unlinkSync(f); } catch { /* ignore */ }
+            }
         }
-
-        try { fs.unlinkSync(rawPath); } catch { /* ignore */ }
-        savedImages.push(`/outputs/${outputFilename}`);
     }
 
     return savedImages;

@@ -269,7 +269,7 @@ export function registerPluginRoutes(app: Express, deps: PluginRouteDeps): void 
                 const sampleCount = Math.max(1, Math.min(4, parseInt(body.sampleCount || '1', 10)));
                 const predictions = await generateTryOn(personNewPath, productNewPath, sampleCount);
 
-                const savedImages = await savePredictions(predictions, paths.outputs, generationId);
+                const savedImages = await savePredictions(predictions, paths.outputs, generationId, personNewPath);
 
                 const creditsRemaining = await deductPluginCredit(req.pluginSession!.id);
                 await insertPluginTryOnHistory(

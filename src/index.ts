@@ -737,8 +737,8 @@ app.post(
                 validSampleCount
             );
 
-            // Save generated images (enhanced to 4K when UPSCALE_ENABLED)
-            const savedImages = await savePredictions(predictions, PATHS.OUTPUTS, generationId);
+            // Save generated images (fidelity stages + 4K enhancement)
+            const savedImages = await savePredictions(predictions, PATHS.OUTPUTS, generationId, personNewPath);
 
             const resultFilenames = savedImages.map((u) => path.basename(u));
             await insertTryOnHistory(userId, generationId, personNewFilename, productNewFilename, resultFilenames);
