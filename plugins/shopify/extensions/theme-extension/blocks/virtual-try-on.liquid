@@ -1,24 +1,47 @@
 {% comment %}
-  ZAHA Virtual Try-On — Shopify Theme Block
-  Add via Theme Editor → Product page → Add block → "ZAHA Virtual Try-On"
+  ZAHA Virtual Try-On — Shopify Theme App Extension block
+  Add via Theme Editor → Product page → Add block → "ZAHA Virtual Try-On".
+
+  No API key needed: the block fetches its config from the app's signed
+  App Proxy (/apps/{proxy_subpath}/config), which Shopify authenticates and
+  forwards to the ZAHA server. Configure the App Proxy in the Partner
+  Dashboard with subpath prefix "apps" and subpath "{proxy_subpath}", pointing
+  to {SHOPIFY_APP_URL}/shopify/proxy.
 {% endcomment %}
 
 <div id="zaha-try-on-{{ block.id }}" class="zaha-try-on-block" style="margin: 16px 0;"></div>
 
-<script src="{{ block.settings.api_url | strip }}/plugin.js" defer></script>
 <script defer>
-  document.addEventListener('DOMContentLoaded', function () {
-    if (!window.ZahaTryOn) return;
-    ZahaTryOn.init({
-      apiUrl: {{ block.settings.api_url | json }},
-      apiKey: {{ block.settings.api_key | json }},
-      productUrl: {{ product.url | absolute_url | json }},
-      productImage: {{ product.featured_image | image_url: width: 800 | json }},
-      buttonText: {{ block.settings.button_text | json }},
-      target: '#zaha-try-on-{{ block.id }}',
-      position: 'before'
-    });
-  });
+  (function () {
+    var subpath = {{ block.settings.proxy_subpath | default: 'zaha' | json }};
+    var productUrl = {{ product.url | absolute_url | json }};
+    var productImage = {{ product.featured_image | image_url: width: 1024 | json }};
+    var buttonText = {{ block.settings.button_text | default: '✨ Virtual Try-On' | json }};
+    var target = '#zaha-try-on-{{ block.id }}';
+
+    fetch('/apps/' + subpath + '/config', { headers: { 'Accept': 'application/json' } })
+      .then(function (r) { return r.ok ? r.json() : Promise.reject(new Error('config ' + r.status)); })
+      .then(function (cfg) {
+        if (!cfg.apiUrl || !cfg.apiKey) throw new Error('ZAHA config missing apiUrl/apiKey');
+        var s = document.createElement('script');
+        s.src = cfg.apiUrl.replace(/\/$/, '') + '/plugin.js';
+        s.defer = true;
+        s.onload = function () {
+          if (!window.ZahaTryOn) return;
+          window.ZahaTryOn.init({
+            apiUrl: cfg.apiUrl,
+            apiKey: cfg.apiKey,
+            productUrl: productUrl,
+            productImage: productImage && productImage.indexOf('//') === 0 ? 'https:' + productImage : productImage,
+            buttonText: buttonText,
+            target: target,
+            position: 'before'
+          });
+        };
+        document.head.appendChild(s);
+      })
+      .catch(function (e) { console.error('[ZAHA] could not load try-on config:', e); });
+  })();
 </script>
 
 {% schema %}
@@ -29,16 +52,10 @@
   "settings": [
     {
       "type": "text",
-      "id": "api_url",
-      "label": "ZAHA API URL",
-      "default": "http://localhost:3000",
-      "info": "Your ZAHA server URL"
-    },
-    {
-      "type": "text",
-      "id": "api_key",
-      "label": "API Key",
-      "info": "From ZAHA admin → Promo Code Management"
+      "id": "proxy_subpath",
+      "label": "App Proxy subpath",
+      "default": "zaha",
+      "info": "Must match the App Proxy subpath configured in the Partner Dashboard (URL: /apps/<subpath>)."
     },
     {
       "type": "text",

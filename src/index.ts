@@ -30,6 +30,8 @@ import { runPluginMigrations, seedDefaultPromoAndSite } from './plugin-db';
 import { prepareImageForVertexAI, cleanupPreparedImage, downloadAndPrepareProductImage, preferJpegProductUrl, normalizeImageUrl } from './image-utils';
 import { getServiceAccountAccessTokenWithRetry, httpsRequest } from './gcp-auth';
 import { savePredictions } from './save-result';
+import { registerShopifyRoutes, isShopifyConfigured } from './shopify';
+import { runShopifyMigrations } from './shopify-db';
 
 // ============================================================================
 // Types & Interfaces
@@ -421,7 +423,14 @@ app.use(
         credentials: true,
     })
 );
-app.use(express.json());
+// Capture the raw body so Shopify webhook HMAC can be verified byte-for-byte.
+app.use(
+    express.json({
+        verify: (req, _res, buf) => {
+            (req as unknown as { rawBody?: Buffer }).rawBody = buf;
+        },
+    })
+);
 
 // ── Rate limiting ────────────────────────────────────────────────────────────
 // General API limiter + stricter limiters for expensive / abuse-prone routes.
@@ -992,6 +1001,13 @@ registerPluginRoutes(app, {
     downloadImageToFile,
 });
 
+// Shopify App routes (OAuth, webhooks, billing, app proxy) — active only when
+// SHOPIFY_API_KEY/SECRET/APP_URL are configured.
+if (isShopifyConfigured()) {
+    registerShopifyRoutes(app);
+    console.log('🛍️  Shopify app routes enabled at /shopify/*');
+}
+
 app.get('/api/health/gcp-auth', async (_req: Request, res: Response) => {
     try {
         const token = await fetchGoogleAccessTokenWithRetry();
@@ -1085,6 +1101,7 @@ app.listen(CONFIG.PORT, async () => {
     await seedSuperadminIfNeeded();
     try {
         await runPluginMigrations();
+        await runShopifyMigrations();
         await seedDefaultPromoAndSite();
         console.log('🧩 Plugin API ready at /api/plugin/* — embed at /embed.html');
         console.log('🎛️  Promo admin at /admin-promos.html (superadmin login)');

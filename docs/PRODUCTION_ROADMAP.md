@@ -56,21 +56,28 @@ Raise fidelity from "visually identical" toward "background/face preserved".
 - Quality gate: auto-reject/regenerate outputs that drift too far (face-embedding
   similarity + background diff thresholds).
 
-## Phase 3 — Shopify App Store app
+## Phase 3 — Shopify App Store app ✅ (this PR, core done)
 
-The current Shopify integration is a theme snippet only. A store-listed app needs:
+Built into the main Express server (`src/shopify.ts`, `src/shopify-db.ts`,
+`database/schema-shopify.pg.sql`). See `docs/SHOPIFY_APP_SETUP.md`.
 
-- **Embedded app** (Remix/Node) with **OAuth** install, App Bridge, session
-  tokens, Polaris admin UI.
-- **Theme App Extension** (app block) — replaces the manual snippet; merchant
-  adds the block in the theme editor, no code editing.
-- **Shopify Billing API** — recurring subscription + usage charges (per-merchant
-  billing).
-- **Mandatory GDPR webhooks** (`customers/data_request`, `customers/redact`,
-  `shop/redact`) and app/uninstall webhooks.
-- Automatic per-shop **API key provisioning** at install (replaces manual key
-  creation in admin-promos).
-- App listing assets, privacy policy, and **App Store review** submission.
+- **OAuth install** with HMAC verification + single-use nonce (CSRF), offline
+  token exchange.
+- **Auto per-shop API key provisioning** at install (creates a `plugin_sites`
+  row; no manual key entry).
+- **Mandatory webhooks** — `app/uninstalled` + all three GDPR topics, each
+  HMAC-verified against the raw body.
+- **Billing API** — recurring application charge create + activate on approval,
+  gated by `SHOPIFY_BILLING_ENABLED` (per-merchant billing for production).
+- **App Proxy** — signed `/shopify/proxy/config` returns the shop's API key so
+  the **theme block needs no pasted key** (block rewritten to use it).
+- HMAC / signature verification **unit-tested** (12 cases: OAuth hex, webhook
+  base64, app-proxy concatenated, shop-domain validation).
+
+### Phase 3 follow-ups (later)
+- Embedded admin UI (App Bridge/Polaris) for plan management + usage.
+- Theme extension `shopify app deploy` + listing assets/screenshots.
+- App Store review submission.
 
 ## Phase 4 — WordPress.org plugin
 
