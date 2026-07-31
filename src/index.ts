@@ -5,6 +5,8 @@ import session from 'express-session';
 import connectPgSimple from 'connect-pg-simple';
 import multer from 'multer';
 import cors from 'cors';
+import helmet from 'helmet';
+import rateLimit from 'express-rate-limit';
 import bcrypt from 'bcrypt';
 import fs from 'fs';
 import path from 'path';
@@ -27,6 +29,7 @@ import { registerPluginRoutes } from './plugin-routes';
 import { runPluginMigrations, seedDefaultPromoAndSite } from './plugin-db';
 import { prepareImageForVertexAI, cleanupPreparedImage, downloadAndPrepareProductImage, preferJpegProductUrl, normalizeImageUrl } from './image-utils';
 import { getServiceAccountAccessTokenWithRetry, httpsRequest } from './gcp-auth';
+import { savePredictions } from './save-result';
 
 // ============================================================================
 // Types & Interfaces
@@ -383,8 +386,71 @@ const app = express();
 // Required on Render/Heroku etc.: trust the reverse proxy so req.secure and cookies work
 app.set('trust proxy', 1);
 
-app.use(cors({ origin: true, credentials: true }));
+// ── Security headers (helmet) ───────────────────────────────────────────────
+// NOTE: frameguard and CSP are intentionally relaxed because the try-on widget
+// is embedded as an <iframe> (embed.html) INSIDE merchant storefronts, and
+// plugin.js / result images are loaded cross-origin. Locking these down would
+// break the embed. Tightening CSP with per-merchant frame-ancestors is a
+// Phase 2 task (done at OAuth install time when the shop domain is known).
+app.use(
+    helmet({
+        frameguard: false, // allow the widget to be iframed on merchant domains
+        contentSecurityPolicy: false, // revisit with a scoped CSP in Phase 2
+        crossOriginResourcePolicy: { policy: 'cross-origin' },
+        crossOriginEmbedderPolicy: false,
+    })
+);
+
+// ── CORS ────────────────────────────────────────────────────────────────────
+// Set ALLOWED_ORIGINS (comma-separated) in production to lock this down.
+// When unset we stay permissive (with a startup warning) so existing embeds keep
+// working, but you SHOULD set it before going live.
+const ALLOWED_ORIGINS = (process.env.ALLOWED_ORIGINS || '')
+    .split(',')
+    .map((s) => s.trim())
+    .filter(Boolean);
+
+app.use(
+    cors({
+        origin: (origin, cb) => {
+            // No Origin header = same-origin nav, curl, or server-to-server: allow.
+            if (!origin) return cb(null, true);
+            if (ALLOWED_ORIGINS.length === 0) return cb(null, true);
+            return cb(null, ALLOWED_ORIGINS.includes(origin));
+        },
+        credentials: true,
+    })
+);
 app.use(express.json());
+
+// ── Rate limiting ────────────────────────────────────────────────────────────
+// General API limiter + stricter limiters for expensive / abuse-prone routes.
+const apiLimiter = rateLimit({
+    windowMs: 60 * 1000,
+    max: Number(process.env.RATE_LIMIT_PER_MIN || 120),
+    standardHeaders: true,
+    legacyHeaders: false,
+    message: { error: 'Too many requests, please slow down.' },
+});
+const authLimiter = rateLimit({
+    windowMs: 15 * 60 * 1000,
+    max: Number(process.env.AUTH_RATE_LIMIT || 20),
+    standardHeaders: true,
+    legacyHeaders: false,
+    message: { error: 'Too many attempts. Please try again later.' },
+});
+const tryOnLimiter = rateLimit({
+    windowMs: 60 * 1000,
+    max: Number(process.env.TRYON_RATE_LIMIT_PER_MIN || 10),
+    standardHeaders: true,
+    legacyHeaders: false,
+    message: { error: 'Too many try-on requests. Please wait a moment.' },
+});
+app.use('/api/', apiLimiter);
+app.use('/api/auth/login', authLimiter);
+app.use('/api/auth/register', authLimiter);
+app.use('/api/virtual-try-on', tryOnLimiter);
+app.use('/api/plugin/try-on', tryOnLimiter);
 
 // Use PostgreSQL session store when DATABASE_URL is set (persists across Render instances/restarts)
 const sessionConfig: session.SessionOptions = {
@@ -671,18 +737,8 @@ app.post(
                 validSampleCount
             );
 
-            // Save generated images
-            const savedImages: string[] = [];
-            for (let i = 0; i < predictions.length; i++) {
-                const prediction = predictions[i];
-                const fileExtension = prediction.mimeType.split('/')[1] || 'png';
-                const outputFilename = `result-${generationId}.${fileExtension}`;
-                const outputPath = path.join(PATHS.OUTPUTS, outputFilename);
-
-                const imageBuffer = Buffer.from(prediction.bytesBase64Encoded, 'base64');
-                fs.writeFileSync(outputPath, imageBuffer);
-                savedImages.push(`/outputs/${outputFilename}`);
-            }
+            // Save generated images (enhanced to 4K when UPSCALE_ENABLED)
+            const savedImages = await savePredictions(predictions, PATHS.OUTPUTS, generationId);
 
             const resultFilenames = savedImages.map((u) => path.basename(u));
             await insertTryOnHistory(userId, generationId, personNewFilename, productNewFilename, resultFilenames);
@@ -963,6 +1019,30 @@ app.get('/api/health/gcp-auth', async (_req: Request, res: Response) => {
 // ============================================================================
 
 initializeApp();
+
+/** Warn loudly about insecure production configuration (does not crash). */
+function validateProductionEnv(): void {
+    if (process.env.NODE_ENV !== 'production') return;
+    const problems: string[] = [];
+    if (!process.env.SESSION_SECRET || process.env.SESSION_SECRET.includes('change-in-production')) {
+        problems.push('SESSION_SECRET is unset or still the default — set a strong random value.');
+    }
+    if (ALLOWED_ORIGINS.length === 0) {
+        problems.push('ALLOWED_ORIGINS is unset — CORS is permissive (any origin). Set your storefront origins.');
+    }
+    if (process.env.COOKIE_SECURE !== 'true') {
+        problems.push('COOKIE_SECURE is not "true" — set it when serving over HTTPS so login cookies are secure.');
+    }
+    if (!/^(1|true|yes|on)$/i.test((process.env.DATABASE_SSL_STRICT || '').trim())) {
+        problems.push('DATABASE_SSL_STRICT is off — DB TLS certificate is not verified (MITM risk).');
+    }
+    if (problems.length) {
+        console.warn('\n⚠️  PRODUCTION CONFIG WARNINGS:');
+        for (const p of problems) console.warn('   • ' + p);
+        console.warn('');
+    }
+}
+validateProductionEnv();
 
 async function seedSuperadminIfNeeded(): Promise<void> {
     try {

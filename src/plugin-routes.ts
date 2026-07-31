@@ -22,6 +22,7 @@ import {
     PluginSession,
 } from './plugin-db';
 import { downloadAndPrepareProductImage, preferJpegProductUrl } from './image-utils';
+import { savePredictions } from './save-result';
 
 declare global {
     namespace Express {
@@ -57,6 +58,32 @@ function getSessionToken(req: Request): string | null {
     return req.get('X-Zaha-Session')?.trim() || (req.body as { sessionToken?: string })?.sessionToken || null;
 }
 
+/**
+ * Best-effort check that the request comes from a domain the site is allowed to
+ * use. Controlled by PLUGIN_DOMAIN_ENFORCEMENT: 'off' (default), 'report'
+ * (log only), or 'strict' (block). Robust per-merchant domain binding is added
+ * with the OAuth app in Phase 2, where the shop domain is verified at install.
+ */
+function checkAllowedDomain(req: Request, site: PluginSite): { ok: boolean; host: string | null } {
+    if (!site.allowed_domains) return { ok: true, host: null };
+    const allow = site.allowed_domains
+        .split(',')
+        .map((d) => d.trim().toLowerCase())
+        .filter(Boolean);
+    if (allow.length === 0) return { ok: true, host: null };
+
+    const source = req.get('Origin') || req.get('Referer') || '';
+    if (!source) return { ok: true, host: null }; // server-to-server: cannot check
+    let host: string;
+    try {
+        host = new URL(source).hostname.toLowerCase();
+    } catch {
+        return { ok: true, host: null };
+    }
+    const ok = allow.some((d) => host === d || host.endsWith('.' + d) || d === 'localhost');
+    return { ok, host };
+}
+
 async function requirePluginKey(req: Request, res: Response, next: NextFunction): Promise<void> {
     const key = getApiKey(req);
     if (!key) {
@@ -68,6 +95,19 @@ async function requirePluginKey(req: Request, res: Response, next: NextFunction)
         res.status(401).json({ error: 'Invalid API key' });
         return;
     }
+
+    const mode = (process.env.PLUGIN_DOMAIN_ENFORCEMENT || 'off').toLowerCase();
+    if (mode === 'report' || mode === 'strict') {
+        const { ok, host } = checkAllowedDomain(req, site);
+        if (!ok) {
+            if (mode === 'strict') {
+                res.status(403).json({ error: 'This domain is not authorized for this API key.' });
+                return;
+            }
+            console.warn(`[plugin] domain not in allow-list for site "${site.name}": ${host}`);
+        }
+    }
+
     req.pluginSite = site;
     next();
 }
@@ -229,14 +269,7 @@ export function registerPluginRoutes(app: Express, deps: PluginRouteDeps): void 
                 const sampleCount = Math.max(1, Math.min(4, parseInt(body.sampleCount || '1', 10)));
                 const predictions = await generateTryOn(personNewPath, productNewPath, sampleCount);
 
-                const savedImages: string[] = [];
-                for (const prediction of predictions) {
-                    const ext = prediction.mimeType.split('/')[1] || 'png';
-                    const outputFilename = `result-${generationId}.${ext}`;
-                    const outputPath = path.join(paths.outputs, outputFilename);
-                    fs.writeFileSync(outputPath, Buffer.from(prediction.bytesBase64Encoded, 'base64'));
-                    savedImages.push(`/outputs/${outputFilename}`);
-                }
+                const savedImages = await savePredictions(predictions, paths.outputs, generationId);
 
                 const creditsRemaining = await deductPluginCredit(req.pluginSession!.id);
                 await insertPluginTryOnHistory(

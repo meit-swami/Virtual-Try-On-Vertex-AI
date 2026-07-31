@@ -24,7 +24,22 @@ const mysqlPool = usePostgres
 // ----------------------------------------------------------------------------
 // PostgreSQL pool (when DATABASE_URL is set - Render, Railway, etc.)
 // ----------------------------------------------------------------------------
-const pgPool = usePostgres ? new pg.Pool({ connectionString: process.env.DATABASE_URL, ssl: { rejectUnauthorized: false } }) : null;
+// SSL: Neon/Render use certs that Node may not chain to a known CA, so the
+// historical default was rejectUnauthorized:false. That disables cert
+// verification (a MITM risk). Set DATABASE_SSL_STRICT=true in production to
+// verify the server certificate; optionally provide DATABASE_CA_CERT (PEM).
+function buildPgSsl(): pg.PoolConfig['ssl'] {
+    const strict = /^(1|true|yes|on)$/i.test((process.env.DATABASE_SSL_STRICT || '').trim());
+    const ca = process.env.DATABASE_CA_CERT;
+    if (strict) {
+        return ca ? { rejectUnauthorized: true, ca } : { rejectUnauthorized: true };
+    }
+    return { rejectUnauthorized: false };
+}
+
+const pgPool = usePostgres
+    ? new pg.Pool({ connectionString: process.env.DATABASE_URL, ssl: buildPgSsl() })
+    : null;
 
 export interface User {
     id: number;
