@@ -61,3 +61,43 @@ Render may delete a free Postgres after the expiry date. To keep using a free in
 2. Set `DB_HOST`, `DB_USER`, `DB_PASSWORD`, `DB_NAME` in your environment (see `.env.example`).
 3. Run `database/schema.sql` in your MySQL (e.g. PlanetScale Console, phpMyAdmin, or `mysql` CLI).
 4. Redeploy and test.
+
+#### Live Try-On (real-time camera)
+
+`/live.html` adds a live mode next to the photo-based try-on: the shopper turns on their camera, picks a garment (upload, drag a product photo from a store page, or paste a product link) and sees it on themselves as they move. Garments can be swapped mid-session.
+
+It runs on [Decart's Lucy VTON realtime model](https://docs.platform.decart.ai/models/realtime/virtual-try-on). Video goes straight from the browser to Decart over WebRTC; this server only issues short-lived session tokens and fetches garment images.
+
+**Turn it on**
+
+1. Create an API key at [platform.decart.ai](https://platform.decart.ai) and set `DECART_API_KEY` in `.env` (see `.env.example`).
+2. `npm run build && npm start` — the build now also bundles the browser SDK into `public/vendor/`.
+3. Log in and open **Live Try-On** in the nav.
+
+Without `DECART_API_KEY` the page explains that live mode is off and everything else works as before.
+
+**Requirements**
+
+- **HTTPS.** Browsers only allow camera access on `https://` (or `localhost`). Live mode will not work on a plain `http://` deployment.
+- A logged-in ZAHA user — tokens are only issued to authenticated sessions.
+
+**Cost controls**
+
+Decart bills per second of live video, so every session is capped:
+
+| Setting | Default | What it does |
+|---|---|---|
+| `LIVE_MAX_SESSION_SECONDS` | `120` | Hard cap per session, enforced by Decart on the token |
+| `LIVE_SESSIONS_PER_HOUR` | `6` | Sessions each user may start per hour (superadmin is exempt) |
+| `LIVE_ALLOWED_ORIGINS` | unset | Restrict tokens to your own site origin(s) |
+| `LIVE_FAST_MODE` | `false` | Lower latency at twice the per-second price |
+
+The page also stops the session when the tab is closed or left in the background for 20 seconds. The hourly limit is held in memory, so it resets on restart and assumes a single server process.
+
+**Endpoints**
+
+- `GET /api/live/config` — whether live mode is enabled, plus the session limits
+- `POST /api/live/token` — (login required) one-session client token
+- `GET /api/live/garment?url=` — (login required) fetches a garment image for the browser; refuses private/internal addresses
+
+Deep links work for store buttons: `/live.html?productUrl=<product page>` or `/live.html?productImage=<image URL>`.

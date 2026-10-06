@@ -27,6 +27,7 @@ import { registerPluginRoutes } from './plugin-routes';
 import { runPluginMigrations, seedDefaultPromoAndSite } from './plugin-db';
 import { prepareImageForVertexAI, cleanupPreparedImage, downloadAndPrepareProductImage, preferJpegProductUrl, normalizeImageUrl } from './image-utils';
 import { getServiceAccountAccessTokenWithRetry, httpsRequest } from './gcp-auth';
+import { registerLiveRoutes } from './live-routes';
 
 // ============================================================================
 // Types & Interfaces
@@ -936,6 +937,8 @@ registerPluginRoutes(app, {
     downloadImageToFile,
 });
 
+const liveConfig = registerLiveRoutes(app, { requireAuth });
+
 app.get('/api/health/gcp-auth', async (_req: Request, res: Response) => {
     try {
         const token = await fetchGoogleAccessTokenWithRetry();
@@ -994,6 +997,11 @@ app.listen(CONFIG.PORT, async () => {
     if (!process.env.DATABASE_URL) {
         console.warn('⚠️  DATABASE_URL is not set — plugin promo/credits will not work.');
     }
+    console.log(
+        liveConfig.apiKey
+            ? `🎥 Live try-on ready at /live.html (${liveConfig.model}, ${liveConfig.maxSessionSeconds}s per session, ${liveConfig.sessionsPerHour}/hour per user)`
+            : 'ℹ️  Live try-on is off — set DECART_API_KEY to enable /live.html'
+    );
     try {
         await VirtualTryOnService.warmUpAuth();
         console.log('✅ Google Cloud auth OK (Vertex AI token obtained)');

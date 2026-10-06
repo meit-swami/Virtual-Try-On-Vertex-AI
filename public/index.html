@@ -1101,6 +1101,7 @@
             <div class="app-nav-links">
                 <a href="#" class="nav-link active" data-page="landing">Home</a>
                 <a href="#" class="nav-link" data-page="try-on">Try On</a>
+                <a href="/live.html">Live Try-On</a>
                 <a href="#" class="nav-link" data-page="subscription">Subscription</a>
                 <span id="authNavWrap">
                     <a href="#" class="nav-link" data-page="login" id="navLogin">Login</a>
@@ -1375,6 +1376,9 @@
                         });
                     });
                     document.getElementById('heroTryBtn').addEventListener('click', () => navigation.show('try-on'));
+                    // Deep link from other pages, e.g. /#login from Live Try-On
+                    const hashPage = location.hash.replace('#', '');
+                    if (hashPage && document.getElementById('page-' + hashPage)) navigation.show(hashPage);
                 },
             };
 

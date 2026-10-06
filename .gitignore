@@ -16,3 +16,6 @@ dist/
 !outputs/
 !texts/
 
+
+# Generated browser bundle (npm run build:client)
+public/vendor/
